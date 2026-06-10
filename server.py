@@ -302,6 +302,64 @@ async def index_page(url: str) -> str:
     return await _index_page_tool(url)
 
 
+async def _index_tree(
+    collection: chromadb.Collection,
+    url: str,
+    max_depth: int = 2,
+    force: bool = False,
+    log=None,
+) -> str:
+    visited: set[str] = set()
+    queue: deque[tuple[str, int]] = deque([(url, 0)])
+    indexed, skipped, failed = 0, 0, 0
+
+    while queue:
+        current_url, depth = queue.popleft()
+        if current_url in visited:
+            continue
+        visited.add(current_url)
+
+        if not force and _is_indexed(collection, current_url):
+            skipped += 1
+            if log:
+                await log(f"[skipped] {current_url}")
+            response = await _fetch(current_url)
+            if response and depth < max_depth and "json" not in response.headers.get("content-type", ""):
+                _enqueue_links(response.text, current_url, depth, visited, queue)
+            continue
+
+        response = await _fetch(current_url)
+        if response is None:
+            failed += 1
+            continue
+
+        try:
+            ok, is_openapi, _ = await _index_response(collection, current_url, response)
+        except Exception:
+            failed += 1
+            continue
+
+        if ok:
+            indexed += 1
+
+        if depth < max_depth and not is_openapi:
+            _enqueue_links(response.text, current_url, depth, visited, queue)
+
+    return f"Indexed {indexed} pages ({skipped} skipped, {failed} failed) starting from {url}"
+
+
+async def _index_tree_tool(url: str, max_depth: int = 2, force: bool = False, log=None) -> str:
+    if _current_collection is None:
+        return "No namespace selected. Call use_namespace(name) first."
+    return await _index_tree(_current_collection, url, max_depth, force, log)
+
+
+@mcp.tool()
+async def index_tree(url: str, ctx: Context, max_depth: int = 2, force: bool = False) -> str:
+    """Fetch a documentation site and recursively index all pages on the same domain."""
+    return await _index_tree_tool(url, max_depth, force, ctx.info)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

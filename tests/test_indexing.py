@@ -77,3 +77,23 @@ async def test_index_page_fetch_failure(ns):
     with patch("server._fetch", new=AsyncMock(return_value=None)):
         result = await server._index_page(ns, url)
     assert "Failed" in result
+
+
+async def test_index_tree_single_page(ns):
+    url = "http://example.com/"
+    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        result = await server._index_tree(ns, url)
+    assert "Indexed 1" in result
+
+
+async def test_index_tree_skips_already_indexed(ns):
+    url = "http://example.com/"
+    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await server._index_tree(ns, url)
+        result = await server._index_tree(ns, url)
+    assert "skipped" in result
+
+
+async def test_index_tree_no_namespace():
+    result = await server._index_tree_tool("http://example.com/")
+    assert "No namespace selected" in result
