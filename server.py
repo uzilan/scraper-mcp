@@ -193,8 +193,8 @@ async def _index_response(
             spec_response = await _fetch(spec_url)
             if spec_response and _is_openapi(spec_response):
                 docs, ids, metas = _openapi_documents(spec_response.json(), spec_url)
-                _upsert(collection, docs, ids, metas, spec_url)
-                swagger_spec_urls.append(spec_url)
+                if _upsert(collection, docs, ids, metas, spec_url):
+                    swagger_spec_urls.append(spec_url)
     chunks = chunk(parse(html))
     ids = [f"{url}::{i}" for i in range(len(chunks))]
     metas = [{"source_url": url} for _ in chunks]
