@@ -97,3 +97,30 @@ async def test_index_tree_skips_already_indexed(ns):
 async def test_index_tree_no_namespace():
     result = await server._index_tree_tool("http://example.com/")
     assert "No namespace selected" in result
+
+
+LINKED_HTML = """
+<html><body>
+<a href="/page-a">Page A</a>
+<a href="/page-b">Page B</a>
+<a href="http://other.com/external">External</a>
+</body></html>
+"""
+
+
+async def test_discover_links_same_domain_only():
+    url = "http://example.com/"
+    leaf = make_html_response("<html><body>leaf</body></html>")
+
+    async def mock_fetch(u):
+        if u == url:
+            return make_html_response(LINKED_HTML)
+        return leaf
+
+    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+        result = await server._discover_links(url, max_depth=1)
+
+    assert url in result
+    assert "http://example.com/page-a" in result
+    assert "http://example.com/page-b" in result
+    assert "http://other.com/external" not in result

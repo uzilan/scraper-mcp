@@ -360,6 +360,32 @@ async def index_tree(url: str, ctx: Context, max_depth: int = 2, force: bool = F
     return await _index_tree_tool(url, max_depth, force, ctx.info)
 
 
+async def _discover_links(url: str, max_depth: int = 2) -> list[str]:
+    visited: set[str] = set()
+    queue: deque[tuple[str, int]] = deque([(url, 0)])
+    found: list[str] = []
+
+    while queue:
+        current_url, depth = queue.popleft()
+        if current_url in visited:
+            continue
+        visited.add(current_url)
+        found.append(current_url)
+
+        if depth < max_depth:
+            response = await _fetch(current_url)
+            if response and "json" not in response.headers.get("content-type", ""):
+                _enqueue_links(response.text, current_url, depth, visited, queue)
+
+    return found
+
+
+@mcp.tool()
+async def discover_links(url: str, max_depth: int = 2) -> list[str]:
+    """Discover all pages reachable from a URL within max_depth hops on the same domain."""
+    return await _discover_links(url, max_depth)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
