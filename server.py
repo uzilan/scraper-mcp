@@ -386,6 +386,72 @@ async def discover_links(url: str, max_depth: int = 2) -> list[str]:
     return await _discover_links(url, max_depth)
 
 
+def _list_indexed_pages(collection: chromadb.Collection) -> list[dict]:
+    if collection.count() == 0:
+        return []
+    metadatas = collection.get()["metadatas"]
+    counts: dict[str, int] = {}
+    for meta in metadatas:
+        url = meta.get("source_url", "unknown")
+        counts[url] = counts.get(url, 0) + 1
+    return [{"url": url, "chunks": n} for url, n in sorted(counts.items())]
+
+
+def _clear_index(collection: chromadb.Collection) -> str:
+    count = collection.count()
+    if count == 0:
+        return "Index already empty."
+    all_ids = collection.get()["ids"]
+    collection.delete(ids=all_ids)
+    return f"Deleted {count} documents from index."
+
+
+def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5) -> list[dict]:
+    results = collection.query(query_texts=[query], n_results=min(n_results, collection.count()))
+    output = []
+    for doc, meta, dist in zip(
+        results["documents"][0],
+        results["metadatas"][0],
+        results["distances"][0],
+    ):
+        output.append({
+            "text": doc,
+            "source_url": meta.get("source_url", "unknown"),
+            "relevance_score": round(1 - dist, 3),
+        })
+    return output
+
+
+def _search_docs_tool(query: str, n_results: int = 5) -> list[dict]:
+    if _current_collection is None:
+        return [{"error": "No namespace selected. Call use_namespace(name) first."}]
+    if _current_collection.count() == 0:
+        return [{"error": "Namespace is empty. Call index_page(url) first."}]
+    return _search_docs(_current_collection, query, n_results)
+
+
+@mcp.tool()
+def list_indexed_pages() -> list[dict]:
+    """List all pages currently in the active namespace index."""
+    if _current_collection is None:
+        return []
+    return _list_indexed_pages(_current_collection)
+
+
+@mcp.tool()
+def clear_index() -> str:
+    """Delete all documents from the active namespace index."""
+    if _current_collection is None:
+        return "No namespace selected. Call use_namespace(name) first."
+    return _clear_index(_current_collection)
+
+
+@mcp.tool()
+def search_docs(query: str, n_results: int = 5) -> list[dict]:
+    """Search the active namespace. Returns relevant chunks with source URLs."""
+    return _search_docs_tool(query, n_results)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
