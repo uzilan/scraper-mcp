@@ -274,6 +274,34 @@ def current_namespace() -> str:
     return _current_namespace()
 
 
+async def _index_page(collection: chromadb.Collection, url: str) -> str:
+    response = await _fetch(url)
+    if response is None:
+        return f"Failed to fetch {url}"
+    indexed, is_openapi, swagger_specs = await _index_response(collection, url, response)
+    if not indexed:
+        return f"No content extracted from {url}"
+    kind = "operations" if is_openapi else "chunks"
+    count = len(collection.get(where={"source_url": url})["ids"])
+    msg = f"Indexed {count} {kind} from {url}"
+    for spec_url in swagger_specs:
+        op_count = len(collection.get(where={"source_url": spec_url})["ids"])
+        msg += f"\n  + {op_count} operations from {spec_url}"
+    return msg
+
+
+async def _index_page_tool(url: str) -> str:
+    if _current_collection is None:
+        return "No namespace selected. Call use_namespace(name) first."
+    return await _index_page(_current_collection, url)
+
+
+@mcp.tool()
+async def index_page(url: str) -> str:
+    """Fetch a documentation page and add it to the current namespace index."""
+    return await _index_page_tool(url)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
