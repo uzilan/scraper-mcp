@@ -71,9 +71,62 @@ def chunk(text: str, max_tokens: int = 500) -> list[str]:
     return chunks
 
 
+def _resolve_ref(schema: dict, components: dict) -> dict:
+    ref = schema.get("$ref", "")
+    if not ref.startswith("#/components/schemas/"):
+        return schema
+    name = ref.split("/")[-1]
+    return components.get("schemas", {}).get(name, schema)
+
+
+def _schema_to_text(schema: dict, components: dict, depth: int = 0, visited: frozenset = frozenset()) -> str:
+    if depth > 4:
+        return ""
+    schema = _resolve_ref(schema, components)
+    ref_key = schema.get("$ref", id(schema))
+    if ref_key in visited:
+        return ""
+    visited = visited | {ref_key}
+
+    lines = []
+    indent = "  " * depth
+
+    for sub in schema.get("allOf", []) + schema.get("anyOf", []) + schema.get("oneOf", []):
+        lines.append(_schema_to_text(_resolve_ref(sub, components), components, depth, visited))
+
+    if "properties" in schema or schema.get("type") == "object":
+        required_fields = set(schema.get("required", []))
+        for name, prop in schema.get("properties", {}).items():
+            prop = _resolve_ref(prop, components)
+            prop_type = prop.get("type", "object" if "properties" in prop else "")
+            if prop_type == "array" and "items" in prop:
+                prop_type = f"array[{_resolve_ref(prop['items'], components).get('type', 'object')}]"
+            req = "*" if name in required_fields else ""
+            desc = prop.get("description", "")
+            line = f"{indent}- {name}{req} ({prop_type})"
+            if desc:
+                line += f": {desc}"
+            lines.append(line)
+            if "properties" in prop or "allOf" in prop or "anyOf" in prop or "oneOf" in prop:
+                lines.append(_schema_to_text(prop, components, depth + 1, visited))
+    elif schema.get("type") == "array" and "items" in schema:
+        lines.append(_schema_to_text(_resolve_ref(schema["items"], components), components, depth, visited))
+
+    return "\n".join(filter(None, lines))
+
+
+def _extract_schema_text(content: dict, components: dict) -> str:
+    for media_content in content.values():
+        schema = media_content.get("schema", {})
+        if schema:
+            return _schema_to_text(schema, components)
+    return ""
+
+
 def _openapi_documents(spec: dict, url: str) -> tuple[list[str], list[str], list[dict]]:
     info = spec.get("info", {})
     base_title = info.get("title", "")
+    components = spec.get("components", {})
     documents, ids, metadatas = [], [], []
     for path, path_item in spec.get("paths", {}).items():
         for method, operation in path_item.items():
@@ -88,6 +141,16 @@ def _openapi_documents(spec: dict, url: str) -> tuple[list[str], list[str], list
                 for p in operation.get("parameters", [])
             ]
             params_text = "\n".join(params) if params else ""
+
+            request_body = operation.get("requestBody", {})
+            request_text = _extract_schema_text(request_body.get("content", {}), components)
+
+            response_text = ""
+            for code, response in operation.get("responses", {}).items():
+                if str(code).startswith("2"):
+                    response_text = _extract_schema_text(response.get("content", {}), components)
+                    break
+
             text = "\n".join(filter(None, [
                 f"# {method.upper()} {path}",
                 f"**API:** {base_title}",
@@ -95,6 +158,8 @@ def _openapi_documents(spec: dict, url: str) -> tuple[list[str], list[str], list
                 f"**Summary:** {summary}" if summary else None,
                 description if description else None,
                 f"**Parameters:**\n{params_text}" if params_text else None,
+                f"**Request Body:**\n{request_text}" if request_text else None,
+                f"**Response:**\n{response_text}" if response_text else None,
             ]))
             documents.append(text)
             ids.append(f"{url}::{op_id}")
