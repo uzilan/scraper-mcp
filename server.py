@@ -145,7 +145,7 @@ def _is_openapi(response: httpx.Response) -> bool:
         return False
     try:
         spec = response.json()
-        return "paths" in spec and "openapi" in spec or "swagger" in spec
+        return "paths" in spec and ("openapi" in spec or "swagger" in spec)
     except Exception:
         return False
 
