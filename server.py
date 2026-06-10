@@ -16,7 +16,7 @@ from mcp.server.fastmcp import Context, FastMCP
 enc = tiktoken.get_encoding("cl100k_base")
 
 CHROMA_PATH = Path(__file__).parent / "data" / "chroma"
-VALID_NAME = re.compile(r"^[a-zA-Z0-9_-]{3,63}$")
+VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$")
 
 embed_fn = ef.DefaultEmbeddingFunction()
 
@@ -407,7 +407,10 @@ def _clear_index(collection: chromadb.Collection) -> str:
 
 
 def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5) -> list[dict]:
-    results = collection.query(query_texts=[query], n_results=min(n_results, collection.count()))
+    effective = min(max(n_results, 1), collection.count())
+    if effective == 0:
+        return []
+    results = collection.query(query_texts=[query], n_results=effective)
     output = []
     for doc, meta, dist in zip(
         results["documents"][0],
@@ -417,7 +420,7 @@ def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5
         output.append({
             "text": doc,
             "source_url": meta.get("source_url", "unknown"),
-            "relevance_score": round(1 - dist, 3),
+            "relevance_score": round(max(0.0, 1 - dist), 3),
         })
     return output
 
