@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -6,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import server
+
+_logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Scraper MCP REST API")
 
@@ -120,3 +123,5 @@ async def discover_links_route(url: str, max_depth: int = 2) -> list[str]:
 _UI_DIST = Path(__file__).parent / "ui" / "dist"
 if _UI_DIST.exists():
     app.mount("/ui", StaticFiles(directory=_UI_DIST, html=True), name="ui")
+else:
+    _logger.warning("UI dist not found at %s — run 'npm run build' in ui/ to serve the frontend", _UI_DIST)
