@@ -1,6 +1,8 @@
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import chromadb
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +12,16 @@ import server
 
 _logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Scraper MCP REST API")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if server._chroma_client is None:
+        server.CHROMA_PATH.mkdir(parents=True, exist_ok=True)
+        server._chroma_client = chromadb.PersistentClient(path=str(server.CHROMA_PATH))
+    yield
+
+
+app = FastAPI(title="Scraper MCP REST API", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
