@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { marked } from 'marked'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -56,14 +56,48 @@ function LinkListBody({ links }) {
   )
 }
 
+function UrlLog({ urls }) {
+  const bottomRef = useRef(null)
+  useEffect(() => {
+    if (typeof bottomRef.current?.scrollIntoView === 'function') {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [urls.length])
+  return (
+    <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
+      {urls.map((msg, i) => (
+        <span key={i} className={`text-[11px] ${msg.includes('[failed]') ? 'text-red-400' : 'text-slate-500'}`}>
+          {msg}
+        </span>
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+function IndexTreeBody({ result, urls }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-slate-400 leading-relaxed">{result}</p>
+      {urls.length > 0 && (
+        <div className="border-t border-slate-800 pt-2">
+          <UrlLog urls={urls} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function HistoryEntry({ entry, faded = false }) {
-  const { tool, query, depth, result, error } = entry
+  const { tool, query, depth, result, error, urls = [], status = 'done' } = entry
   const tc = TOOL_CONFIG[tool] ?? { icon: '?', label: tool, color: 'text-slate-400' }
   const [collapsed, setCollapsed] = useState(faded)
+  const isPending = status === 'pending'
 
   const summary = error ? 'error'
-    : tool === 'search' ? `${result?.results?.length ?? 0} results`
-    : tool === 'discover' ? `${result?.length ?? 0} links`
+    : isPending ? '⋯'
+    : tool === 'search' ? `${result.results.length} results`
+    : tool === 'discover' ? `${result.length} links`
     : '✓ done'
 
   return (
@@ -84,10 +118,12 @@ export default function HistoryEntry({ entry, faded = false }) {
         <div className="px-3.5 py-2.5 flex flex-col gap-2">
           {error && <p className="text-xs text-red-400">{error}</p>}
           {!error && tool === 'search' && <SearchBody result={result} />}
-          {!error && tool === 'discover' && result && <LinkListBody links={result} />}
-          {!error && (tool === 'index-page' || tool === 'index-tree') && (
+          {!error && tool === 'discover' && !isPending && <LinkListBody links={result} />}
+          {!error && tool === 'index-tree' && !isPending && <IndexTreeBody result={result} urls={urls} />}
+          {!error && tool === 'index-page' && (
             <p className="text-xs text-slate-400 leading-relaxed">{result}</p>
           )}
+          {!error && isPending && <UrlLog urls={urls} />}
         </div>
       )}
     </div>

@@ -8,7 +8,7 @@ const searchEntry = {
   query: 'bearer token',
   depth: null,
   result: {
-    results: [{ text: 'Bearer tokens go in Authorization header', url: 'https://docs.example.com/auth' }],
+    results: [{ text: 'Bearer tokens go in Authorization header', source_url: 'https://docs.example.com/auth' }],
     references: [],
   },
   error: null,
@@ -98,5 +98,60 @@ describe('HistoryEntry — faded', () => {
   it('does not apply opacity class when faded=false', () => {
     const { container } = render(<HistoryEntry entry={searchEntry} faded={false} />)
     expect(container.firstChild).not.toHaveClass('opacity-45')
+  })
+})
+
+const pendingTreeEntry = {
+  id: 5,
+  tool: 'index-tree',
+  query: 'https://docs.example.com/',
+  depth: 2,
+  result: null,
+  error: null,
+  urls: ['[indexed] https://docs.example.com/', '[failed] https://docs.example.com/broken'],
+  status: 'pending',
+}
+
+const doneTreeEntryWithLog = {
+  id: 6,
+  tool: 'index-tree',
+  query: 'https://docs.example.com/',
+  depth: 2,
+  result: 'Indexed 1 page (0 skipped, 1 failed) starting from https://docs.example.com/',
+  error: null,
+  urls: ['[indexed] https://docs.example.com/', '[failed] https://docs.example.com/broken'],
+  status: 'done',
+}
+
+describe('HistoryEntry — index-tree pending', () => {
+  it('renders live URL feed with indexed and failed messages', () => {
+    render(<HistoryEntry entry={pendingTreeEntry} faded={false} />)
+    expect(screen.getByText('[indexed] https://docs.example.com/')).toBeInTheDocument()
+    expect(screen.getByText('[failed] https://docs.example.com/broken')).toBeInTheDocument()
+  })
+
+  it('renders failed URL in red', () => {
+    render(<HistoryEntry entry={pendingTreeEntry} faded={false} />)
+    const el = screen.getByText('[failed] https://docs.example.com/broken')
+    expect(el).toHaveClass('text-red-400')
+  })
+
+  it('shows ⋯ as summary while pending', () => {
+    render(<HistoryEntry entry={pendingTreeEntry} faded={false} />)
+    expect(screen.getByText('⋯')).toBeInTheDocument()
+  })
+})
+
+describe('HistoryEntry — index-tree done with URL log', () => {
+  it('renders summary and URL log', () => {
+    render(<HistoryEntry entry={doneTreeEntryWithLog} faded={false} />)
+    expect(screen.getByText(/Indexed 1 page/)).toBeInTheDocument()
+    expect(screen.getByText('[indexed] https://docs.example.com/')).toBeInTheDocument()
+  })
+
+  it('renders failed URL in red in done log', () => {
+    render(<HistoryEntry entry={doneTreeEntryWithLog} faded={false} />)
+    const el = screen.getByText('[failed] https://docs.example.com/broken')
+    expect(el).toHaveClass('text-red-400')
   })
 })
