@@ -58,15 +58,17 @@ def test_clear_index_empty(ns):
 
 def test_search_docs_no_namespace():
     result = server._search_docs_tool("auth tokens")
-    assert "No namespace selected" in result[0]["error"]
+    assert "No namespace selected" in result["error"]
 
 
 async def test_search_docs_returns_results(ns):
     url = "http://example.com/docs"
     with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
         await server._index_page(ns, url)
-    results = server._search_docs(ns, "authentication bearer token")
+    result = server._search_docs(ns, "authentication bearer token")
+    results = result["results"]
     assert len(results) > 0
     assert "source_url" in results[0]
     assert "text" in results[0]
     assert "relevance_score" in results[0]
+    assert isinstance(result["references"], list)

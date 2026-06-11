@@ -4,13 +4,13 @@ from server import chunk, parse
 
 def test_create_namespace_valid():
     result = server._create_namespace(server._chroma_client, "my-ns")
-    assert result == "Namespace 'my-ns' ready."
+    assert result == "Namespace 'my-ns' created and is now active."
 
 
 def test_create_namespace_idempotent():
     server._create_namespace(server._chroma_client, "my-ns")
     result = server._create_namespace(server._chroma_client, "my-ns")
-    assert result == "Namespace 'my-ns' ready."
+    assert result == "Namespace 'my-ns' created and is now active."
 
 
 def test_create_namespace_invalid_name():
