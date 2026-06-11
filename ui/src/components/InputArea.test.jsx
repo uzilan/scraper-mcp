@@ -25,6 +25,15 @@ describe('InputArea — search tool', () => {
     await userEvent.type(screen.getByRole('textbox'), 'rate limiting{Enter}')
     expect(onSubmit).toHaveBeenCalledWith({ value: 'rate limiting', depth: null })
   })
+
+  it('does not call onSubmit when disabled and Enter is pressed', async () => {
+    const onSubmit = vi.fn()
+    const { rerender } = render(<InputArea tool="search" onSubmit={onSubmit} disabled={false} />)
+    await userEvent.type(screen.getByRole('textbox'), 'some query')
+    rerender(<InputArea tool="search" onSubmit={onSubmit} disabled={true} />)
+    await userEvent.keyboard('{Enter}')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
 })
 
 describe('InputArea — index-page tool', () => {

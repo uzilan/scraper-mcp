@@ -26,7 +26,7 @@ export default function InputArea({ tool, onSubmit, disabled }) {
         <input
           value={value}
           onChange={e => setValue(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          onKeyDown={e => e.key === 'Enter' && !disabled && handleSubmit()}
           placeholder={config.placeholder}
           disabled={disabled}
           className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3.5 py-2 text-slate-200 text-sm outline-none focus:border-sky-600 disabled:opacity-50"
@@ -48,6 +48,7 @@ export default function InputArea({ tool, onSubmit, disabled }) {
               value={depth}
               min={1}
               max={10}
+              disabled={disabled}
               onChange={e => setDepth(Number(e.target.value))}
               className="w-12 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-200 text-xs text-center"
             />
