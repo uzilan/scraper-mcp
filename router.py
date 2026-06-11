@@ -121,17 +121,21 @@ async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = Fa
         task = asyncio.create_task(
             server._index_tree(server._current_collection, url, max_depth, force, log)
         )
-        while not task.done():
-            try:
-                msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+        try:
+            while not task.done():
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+            while not queue.empty():
+                msg = queue.get_nowait()
                 yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
-            except asyncio.TimeoutError:
-                yield ": keepalive\n\n"
-        while not queue.empty():
-            msg = queue.get_nowait()
-            yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
-        summary = await task
-        yield f"data: {json.dumps({'type': 'done', 'summary': summary})}\n\n"
+            summary = await task
+            yield f"data: {json.dumps({'type': 'done', 'summary': summary})}\n\n"
+        except GeneratorExit:
+            task.cancel()
+            raise
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -174,17 +178,21 @@ async def discover_links_stream_route(url: str, max_depth: int = 2):
 
     async def generate():
         task = asyncio.create_task(server._discover_links(url, max_depth, log))
-        while not task.done():
-            try:
-                u = await asyncio.wait_for(queue.get(), timeout=0.1)
+        try:
+            while not task.done():
+                try:
+                    u = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield f"data: {json.dumps({'type': 'progress', 'message': u})}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+            while not queue.empty():
+                u = queue.get_nowait()
                 yield f"data: {json.dumps({'type': 'progress', 'message': u})}\n\n"
-            except asyncio.TimeoutError:
-                yield ": keepalive\n\n"
-        while not queue.empty():
-            u = queue.get_nowait()
-            yield f"data: {json.dumps({'type': 'progress', 'message': u})}\n\n"
-        await task
-        yield f"data: {json.dumps({'type': 'done', 'count': len(found)})}\n\n"
+            await task
+            yield f"data: {json.dumps({'type': 'done', 'count': len(found)})}\n\n"
+        except GeneratorExit:
+            task.cancel()
+            raise
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
