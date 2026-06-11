@@ -201,4 +201,11 @@ describe('discoverLinksStream', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'progress', message: 'http://example.com/' })
     expect(mockEs.close).toHaveBeenCalled()
   })
+
+  it('rejects and closes on stream error', async () => {
+    const promise = discoverLinksStream('http://example.com/', 2, vi.fn())
+    mockEs.onerror()
+    await expect(promise).rejects.toThrow('Stream error')
+    expect(mockEs.close).toHaveBeenCalled()
+  })
 })
