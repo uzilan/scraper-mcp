@@ -294,7 +294,7 @@ def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5
 # ---------------------------------------------------------------------------
 
 
-async def _discover_links(url: str, max_depth: int = 2) -> list[str]:
+async def _discover_links(url: str, max_depth: int = 2, log=None) -> list[str]:
     visited: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(url, 0)])
     found: list[str] = []
@@ -305,6 +305,8 @@ async def _discover_links(url: str, max_depth: int = 2) -> list[str]:
             continue
         visited.add(current_url)
         found.append(current_url)
+        if log:
+            await log(current_url)
 
         if depth < max_depth:
             response = await _fetch(current_url)

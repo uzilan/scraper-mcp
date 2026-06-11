@@ -142,3 +142,14 @@ async def test_index_tree_log_failed_fetch(ns):
     with patch("server._fetch", new=AsyncMock(return_value=None)):
         await server._index_tree(ns, url, log=collect)
     assert any("[failed]" in m and url in m for m in logged)
+
+
+async def test_discover_links_log_callback():
+    url = "http://example.com/"
+    logged = []
+    async def collect(u): logged.append(u)
+    leaf = make_html_response("<html><body>leaf</body></html>")
+    with patch("server._fetch", new=AsyncMock(return_value=leaf)):
+        result = await server._discover_links(url, max_depth=0, log=collect)
+    assert url in logged
+    assert url in result
