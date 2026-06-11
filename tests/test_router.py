@@ -68,7 +68,7 @@ async def test_use_namespace_not_found(client):
 async def test_current_namespace_none(client):
     response = await client.get("/namespaces/current")
     assert response.status_code == 200
-    assert "No namespace" in response.json()
+    assert response.json() == ""
 
 
 async def test_current_namespace_set(client):

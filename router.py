@@ -76,7 +76,8 @@ def use_namespace_route(name: str) -> str:
 
 @app.get("/namespaces/current")
 def current_namespace_route() -> str:
-    return server._current_namespace()
+    ns = server._current_namespace()
+    return "" if ns.startswith("No namespace") else ns
 
 
 class IndexPageBody(BaseModel):
