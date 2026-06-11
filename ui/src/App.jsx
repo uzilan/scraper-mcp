@@ -34,18 +34,48 @@ export default function App() {
 
   const handleSubmit = useCallback(async ({ value, depth }) => {
     setLoading(true)
-    const entry = { id: Date.now(), tool, query: value, depth, result: null, error: null }
+    const entry = { id: Date.now(), tool, query: value, depth, result: null, error: null, urls: [], status: 'done' }
+
+    if (tool === 'index-tree' || tool === 'discover') {
+      entry.status = 'pending'
+      setHistory(prev => [entry, ...prev])
+      const collected = []
+      const onEvent = (ev) => {
+        if (ev.type === 'progress') {
+          collected.push(ev.message)
+          setHistory(prev => prev.map(e =>
+            e.id === entry.id ? { ...e, urls: [...collected] } : e
+          ))
+        }
+      }
+      try {
+        if (tool === 'index-tree') {
+          const summary = await api.indexTreeStream(value, depth, false, onEvent)
+          setHistory(prev => prev.map(e =>
+            e.id === entry.id ? { ...e, result: summary, status: 'done' } : e
+          ))
+          refreshPages()
+        } else {
+          await api.discoverLinksStream(value, depth, onEvent)
+          setHistory(prev => prev.map(e =>
+            e.id === entry.id ? { ...e, result: [...collected], status: 'done' } : e
+          ))
+        }
+      } catch (err) {
+        setHistory(prev => prev.map(e =>
+          e.id === entry.id ? { ...e, error: err.message, status: 'done' } : e
+        ))
+      }
+      setLoading(false)
+      return
+    }
+
     try {
       if (tool === 'search') {
         entry.result = await api.searchDocs(value)
       } else if (tool === 'index-page') {
         entry.result = await api.indexPage(value)
         refreshPages()
-      } else if (tool === 'index-tree') {
-        entry.result = await api.indexTree(value, depth)
-        refreshPages()
-      } else if (tool === 'discover') {
-        entry.result = await api.discoverLinks(value, depth)
       }
     } catch (e) {
       entry.error = e.message

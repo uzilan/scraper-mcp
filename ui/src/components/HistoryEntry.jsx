@@ -62,8 +62,8 @@ export default function HistoryEntry({ entry, faded = false }) {
   const [collapsed, setCollapsed] = useState(faded)
 
   const summary = error ? 'error'
-    : tool === 'search' ? `${result.results.length} results`
-    : tool === 'discover' ? `${result.length} links`
+    : tool === 'search' ? `${result?.results?.length ?? 0} results`
+    : tool === 'discover' ? `${result?.length ?? 0} links`
     : '✓ done'
 
   return (
@@ -84,7 +84,7 @@ export default function HistoryEntry({ entry, faded = false }) {
         <div className="px-3.5 py-2.5 flex flex-col gap-2">
           {error && <p className="text-xs text-red-400">{error}</p>}
           {!error && tool === 'search' && <SearchBody result={result} />}
-          {!error && tool === 'discover' && <LinkListBody links={result} />}
+          {!error && tool === 'discover' && result && <LinkListBody links={result} />}
           {!error && (tool === 'index-page' || tool === 'index-tree') && (
             <p className="text-xs text-slate-400 leading-relaxed">{result}</p>
           )}
