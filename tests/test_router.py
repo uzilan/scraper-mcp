@@ -213,3 +213,25 @@ async def test_discover_links(client):
     assert "http://example.com/" in links
     assert "http://example.com/page-a" in links
     assert "http://other.com/ext" not in links
+
+
+async def test_discover_links_stream_success(client):
+    linked_html = '<html><body><a href="/page-a">A</a></body></html>'
+
+    async def mock_fetch(url):
+        if url == "http://example.com/":
+            return _html_response(linked_html)
+        return _html_response("<html><body>leaf</body></html>")
+
+    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+        async with client.stream(
+            "GET", "/links/stream", params={"url": "http://example.com/", "max_depth": 1}
+        ) as resp:
+            assert resp.status_code == 200
+            events = []
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+
+    assert events[-1]["type"] == "done"
+    assert any(e["type"] == "progress" and "example.com" in e["message"] for e in events)
