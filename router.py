@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import server
@@ -112,3 +115,8 @@ def search_route(query: str, n_results: int = 5) -> dict:
 @app.get("/links")
 async def discover_links_route(url: str, max_depth: int = 2) -> list[str]:
     return await server._discover_links(url, max_depth)
+
+
+_UI_DIST = Path(__file__).parent / "ui" / "dist"
+if _UI_DIST.exists():
+    app.mount("/ui", StaticFiles(directory=_UI_DIST, html=True), name="ui")
