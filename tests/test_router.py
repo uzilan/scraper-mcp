@@ -150,3 +150,44 @@ async def test_clear_index_success(ns_client):
     response = await ns_client.delete("/index")
     assert response.status_code == 200
     assert "Deleted" in response.json()
+
+
+async def test_search_no_namespace(client):
+    response = await client.get("/search", params={"query": "hello"})
+    assert response.status_code == 400
+
+
+async def test_search_success(ns_client):
+    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+        await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
+    response = await ns_client.get("/search", params={"query": "documentation", "n_results": 3})
+    assert response.status_code == 200
+    body = response.json()
+    assert "results" in body
+    assert "references" in body
+    assert isinstance(body["results"], list)
+    assert isinstance(body["references"], list)
+
+
+async def test_discover_links(client):
+    linked_html = (
+        '<html><body>'
+        '<a href="/page-a">A</a>'
+        '<a href="http://other.com/ext">Ext</a>'
+        '</body></html>'
+    )
+    leaf = _html_response("<html><body>leaf</body></html>")
+
+    async def mock_fetch(url):
+        if url == "http://example.com/":
+            return _html_response(linked_html)
+        return leaf
+
+    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+        response = await client.get("/links", params={"url": "http://example.com/", "max_depth": 1})
+
+    assert response.status_code == 200
+    links = response.json()
+    assert "http://example.com/" in links
+    assert "http://example.com/page-a" in links
+    assert "http://other.com/ext" not in links

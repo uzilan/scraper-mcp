@@ -99,3 +99,16 @@ def clear_index_route() -> str:
     if server._current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
     return server._clear_index(server._current_collection)
+
+
+@app.get("/search")
+def search_route(query: str, n_results: int = 5) -> dict:
+    result = server._search_docs_tool(query, n_results)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@app.get("/links")
+async def discover_links_route(url: str, max_depth: int = 2) -> list[str]:
+    return await server._discover_links(url, max_depth)
