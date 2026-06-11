@@ -1,6 +1,6 @@
 async function _fetch(url, options) {
   const res = await fetch(url, options)
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
   return res.json()
 }
 
@@ -19,11 +19,11 @@ export function createNamespace(name) {
 }
 
 export function useNamespace(name) {
-  return _fetch(`/namespaces/${encodeURIComponent(name)}/use`, { method: 'POST' })
+  return _fetch(`/namespaces/${encodeURIComponent(name)}/use`, { method: 'POST', headers: JSON_HEADERS })
 }
 
 export function deleteNamespace(name) {
-  return _fetch(`/namespaces/${encodeURIComponent(name)}`, { method: 'DELETE' })
+  return _fetch(`/namespaces/${encodeURIComponent(name)}`, { method: 'DELETE', headers: JSON_HEADERS })
 }
 
 export function listIndexedPages() {

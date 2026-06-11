@@ -10,8 +10,8 @@ vi.stubGlobal('fetch', mockFetch)
 function mockOk(data) {
   mockFetch.mockResolvedValueOnce({ ok: true, json: async () => data, text: async () => String(data) })
 }
-function mockError(text) {
-  mockFetch.mockResolvedValueOnce({ ok: false, text: async () => text })
+function mockError(status, text) {
+  mockFetch.mockResolvedValueOnce({ ok: false, status, text: async () => text })
 }
 
 beforeEach(() => mockFetch.mockReset())
@@ -39,13 +39,14 @@ describe('createNamespace', () => {
     expect(result).toContain('foo')
     expect(mockFetch).toHaveBeenCalledWith('/namespaces', expect.objectContaining({
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'foo' }),
     }))
   })
 
   it('throws Error on non-OK response', async () => {
-    mockError('Invalid name: must match [a-z0-9-]+')
-    await expect(createNamespace('BAD')).rejects.toThrow('Invalid name')
+    mockError(400, 'Invalid name: must match [a-z0-9-]+')
+    await expect(createNamespace('BAD')).rejects.toThrow('400: Invalid name')
   })
 })
 
@@ -53,7 +54,10 @@ describe('useNamespace', () => {
   it('POSTs to /namespaces/{name}/use', async () => {
     mockOk("Now using 'ns2'.")
     await useNamespace('ns2')
-    expect(mockFetch).toHaveBeenCalledWith('/namespaces/ns2/use', expect.objectContaining({ method: 'POST' }))
+    expect(mockFetch).toHaveBeenCalledWith('/namespaces/ns2/use', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }))
   })
 })
 
@@ -61,7 +65,10 @@ describe('deleteNamespace', () => {
   it('DELETEs /namespaces/{name}', async () => {
     mockOk("Namespace 'ns1' deleted.")
     await deleteNamespace('ns1')
-    expect(mockFetch).toHaveBeenCalledWith('/namespaces/ns1', expect.objectContaining({ method: 'DELETE' }))
+    expect(mockFetch).toHaveBeenCalledWith('/namespaces/ns1', expect.objectContaining({
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+    }))
   })
 })
 
