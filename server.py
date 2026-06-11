@@ -559,9 +559,25 @@ def _extract_schema_text(content: dict, components: dict) -> str:
 # Entry point
 # ---------------------------------------------------------------------------
 
+import asyncio
+import os
+
+import uvicorn
+
+
+async def _run_all() -> None:
+    from router import app as http_app
+    port = int(os.environ.get("HTTP_PORT", "8000"))
+    config = uvicorn.Config(http_app, host="0.0.0.0", port=port, log_level="info")
+    http_server = uvicorn.Server(config)
+    await asyncio.gather(
+        mcp.run_async(transport="stdio"),
+        http_server.serve(),
+    )
+
 
 def main() -> None:
-    mcp.run(transport="stdio")
+    asyncio.run(_run_all())
 
 
 if __name__ == "__main__":
