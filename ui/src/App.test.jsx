@@ -8,9 +8,14 @@ vi.mock('./api')
 
 describe('App', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     api.listNamespaces.mockResolvedValue(['test-ns'])
     api.currentNamespace.mockResolvedValue('test-ns')
     api.listIndexedPages.mockResolvedValue([])
+    api.searchDocs.mockResolvedValue({ results: [], references: [] })
+    api.indexPage.mockResolvedValue('Indexed.')
+    api.indexTree.mockResolvedValue('Indexed tree.')
+    api.discoverLinks.mockResolvedValue([])
   })
 
   it('shows current namespace in sidebar on mount', async () => {
