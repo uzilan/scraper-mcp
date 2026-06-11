@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import NamespacePanel from './components/NamespacePanel'
 import PagesList from './components/PagesList'
 import ToolBar from './components/ToolBar'
@@ -14,6 +14,23 @@ export default function App() {
   const [tool, setTool] = useState('search')
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(300)
+  const sidebarRef = useRef(null)
+
+  const handleDividerMouseDown = (e) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarRef.current.offsetWidth
+    const onMouseMove = (e) => {
+      setSidebarWidth(Math.max(160, Math.min(800, startWidth + e.clientX - startX)))
+    }
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
 
   const handleSubmit = useCallback(async ({ value, depth }) => {
     setLoading(true)
@@ -39,7 +56,7 @@ export default function App() {
 
   return (
     <div className="bg-slate-950 text-slate-200 font-sans text-[13px] h-screen overflow-hidden flex">
-      <div className="w-60 min-w-60 border-r border-slate-800 flex flex-col bg-slate-900">
+      <div ref={sidebarRef} style={{ width: sidebarWidth }} className="shrink-0 flex flex-col bg-slate-900 h-screen overflow-hidden">
         <NamespacePanel
           namespaces={namespaces}
           current={current}
@@ -49,7 +66,11 @@ export default function App() {
         />
         <PagesList pages={pages} />
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div
+        onMouseDown={handleDividerMouseDown}
+        className="w-1 shrink-0 bg-slate-800 hover:bg-sky-600 cursor-col-resize transition-colors"
+      />
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <ToolBar active={tool} onChange={setTool} />
         <InputArea tool={tool} onSubmit={handleSubmit} disabled={loading} />
         <History entries={history} />
