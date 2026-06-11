@@ -1,9 +1,12 @@
+import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import chromadb
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -103,6 +106,34 @@ async def index_tree_route(body: IndexTreeBody) -> str:
     result = await server._index_tree_tool(body.url, body.max_depth, body.force)
     _raise_if_error(result)
     return result
+
+
+@app.get("/index/tree/stream")
+async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = False):
+    if server._current_collection is None:
+        raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def log(msg: str) -> None:
+        await queue.put(msg)
+
+    async def generate():
+        task = asyncio.create_task(
+            server._index_tree(server._current_collection, url, max_depth, force, log)
+        )
+        while not task.done():
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=0.1)
+                yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+        while not queue.empty():
+            msg = queue.get_nowait()
+            yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
+        summary = await task
+        yield f"data: {json.dumps({'type': 'done', 'summary': summary})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @app.get("/index/pages")

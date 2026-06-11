@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -167,6 +168,27 @@ async def test_search_success(ns_client):
     assert "references" in body
     assert isinstance(body["results"], list)
     assert isinstance(body["references"], list)
+
+
+async def test_index_tree_stream_no_namespace(client):
+    response = await client.get("/index/tree/stream", params={"url": "http://example.com"})
+    assert response.status_code == 400
+
+
+async def test_index_tree_stream_success(ns_client):
+    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+        async with ns_client.stream(
+            "GET", "/index/tree/stream", params={"url": "http://example.com/"}
+        ) as resp:
+            assert resp.status_code == 200
+            events = []
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    events.append(json.loads(line[6:]))
+
+    assert events[-1]["type"] == "done"
+    assert "Indexed" in events[-1]["summary"]
+    assert any(e["type"] == "progress" for e in events)
 
 
 async def test_discover_links(client):
