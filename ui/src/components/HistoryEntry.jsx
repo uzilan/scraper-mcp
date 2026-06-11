@@ -34,9 +34,9 @@ function LinkListBody({ links }) {
   )
 }
 
-export default function HistoryEntry({ entry, faded }) {
+export default function HistoryEntry({ entry, faded = false }) {
   const { tool, query, depth, result, error } = entry
-  const tc = TOOL_CONFIG[tool]
+  const tc = TOOL_CONFIG[tool] ?? { icon: '?', label: tool, color: 'text-slate-400' }
 
   const summary = error ? 'error'
     : tool === 'search' ? `${result.results.length} results`
