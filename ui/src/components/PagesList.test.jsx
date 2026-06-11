@@ -13,6 +13,7 @@ describe('PagesList', () => {
     expect(links).toHaveLength(2)
     expect(links[0]).toHaveAttribute('href', 'https://docs.example.com/getting-started')
     expect(links[0]).toHaveAttribute('target', '_blank')
+    expect(links[0]).toHaveAttribute('title', 'https://docs.example.com/getting-started')
   })
 
   it('shows page count', () => {

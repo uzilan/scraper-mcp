@@ -52,4 +52,28 @@ describe('NamespacePanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add' }))
     expect(baseProps.onCreate).not.toHaveBeenCalled()
   })
+
+  it('renders all namespaces when current is null', () => {
+    render(<NamespacePanel {...baseProps} current={null} />)
+    // No highlighted current namespace box
+    expect(screen.getByText('my-project')).toBeInTheDocument()
+    expect(screen.getByText('docs-v1')).toBeInTheDocument()
+  })
+
+  it('delete button on other namespace does not trigger onSwitch', async () => {
+    render(<NamespacePanel {...baseProps} />)
+    // The ✕ buttons: first is for 'my-project' (current), second is for 'docs-v1' (other)
+    const deleteButtons = screen.getAllByText('✕')
+    await userEvent.click(deleteButtons[deleteButtons.length - 1])
+    expect(baseProps.onDelete).toHaveBeenCalled()
+    expect(baseProps.onSwitch).not.toHaveBeenCalled()
+  })
+
+  it('clears input after onCreate succeeds', async () => {
+    render(<NamespacePanel {...baseProps} />)
+    const input = screen.getByPlaceholderText('new namespace…')
+    await userEvent.type(input, 'new-ns')
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }))
+    expect(input).toHaveValue('')
+  })
 })
