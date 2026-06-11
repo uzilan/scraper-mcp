@@ -51,3 +51,29 @@ export function discoverLinks(url, maxDepth = 2) {
   const params = new URLSearchParams({ url, max_depth: maxDepth })
   return _fetch(`/links?${params}`)
 }
+
+export function indexTreeStream(url, maxDepth = 2, force = false, onEvent) {
+  const params = new URLSearchParams({ url, max_depth: maxDepth, force })
+  const es = new EventSource(`/index/tree/stream?${params}`)
+  return new Promise((resolve, reject) => {
+    es.onmessage = e => {
+      const ev = JSON.parse(e.data)
+      onEvent(ev)
+      if (ev.type === 'done') { es.close(); resolve(ev.summary) }
+    }
+    es.onerror = () => { es.close(); reject(new Error('Stream error')) }
+  })
+}
+
+export function discoverLinksStream(url, maxDepth = 2, onEvent) {
+  const params = new URLSearchParams({ url, max_depth: maxDepth })
+  const es = new EventSource(`/links/stream?${params}`)
+  return new Promise((resolve, reject) => {
+    es.onmessage = e => {
+      const ev = JSON.parse(e.data)
+      onEvent(ev)
+      if (ev.type === 'done') { es.close(); resolve() }
+    }
+    es.onerror = () => { es.close(); reject(new Error('Stream error')) }
+  })
+}

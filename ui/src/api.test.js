@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   listNamespaces, currentNamespace, createNamespace, useNamespace, deleteNamespace,
   listIndexedPages, indexPage, indexTree, searchDocs, discoverLinks,
+  indexTreeStream, discoverLinksStream,
 } from './api'
 
 const mockFetch = vi.fn()
@@ -127,5 +128,77 @@ describe('discoverLinks', () => {
     const result = await discoverLinks('https://docs.example.com/', 2)
     expect(result).toHaveLength(2)
     expect(mockFetch).toHaveBeenCalledWith('/links?url=https%3A%2F%2Fdocs.example.com%2F&max_depth=2', undefined)
+  })
+})
+
+describe('indexTreeStream', () => {
+  let mockEs
+
+  beforeEach(() => {
+    mockEs = { onmessage: null, onerror: null, close: vi.fn() }
+    vi.stubGlobal('EventSource', vi.fn(() => mockEs))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('opens EventSource at /index/tree/stream with params', () => {
+    indexTreeStream('http://example.com/', 2, false, vi.fn())
+    expect(EventSource).toHaveBeenCalledWith(
+      '/index/tree/stream?url=http%3A%2F%2Fexample.com%2F&max_depth=2&force=false'
+    )
+  })
+
+  it('calls onEvent for progress events and resolves with summary on done', async () => {
+    const onEvent = vi.fn()
+    const promise = indexTreeStream('http://example.com/', 2, false, onEvent)
+
+    mockEs.onmessage({ data: JSON.stringify({ type: 'progress', message: '[indexed] http://example.com/' }) })
+    mockEs.onmessage({ data: JSON.stringify({ type: 'done', summary: 'Indexed 1 page (0 skipped, 0 failed)' }) })
+
+    const result = await promise
+    expect(result).toBe('Indexed 1 page (0 skipped, 0 failed)')
+    expect(onEvent).toHaveBeenCalledWith({ type: 'progress', message: '[indexed] http://example.com/' })
+    expect(mockEs.close).toHaveBeenCalled()
+  })
+
+  it('rejects and closes on stream error', async () => {
+    const promise = indexTreeStream('http://example.com/', 2, false, vi.fn())
+    mockEs.onerror()
+    await expect(promise).rejects.toThrow('Stream error')
+    expect(mockEs.close).toHaveBeenCalled()
+  })
+})
+
+describe('discoverLinksStream', () => {
+  let mockEs
+
+  beforeEach(() => {
+    mockEs = { onmessage: null, onerror: null, close: vi.fn() }
+    vi.stubGlobal('EventSource', vi.fn(() => mockEs))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('opens EventSource at /links/stream with params', () => {
+    discoverLinksStream('http://example.com/', 2, vi.fn())
+    expect(EventSource).toHaveBeenCalledWith(
+      '/links/stream?url=http%3A%2F%2Fexample.com%2F&max_depth=2'
+    )
+  })
+
+  it('calls onEvent for progress events and resolves on done', async () => {
+    const onEvent = vi.fn()
+    const promise = discoverLinksStream('http://example.com/', 2, onEvent)
+
+    mockEs.onmessage({ data: JSON.stringify({ type: 'progress', message: 'http://example.com/' }) })
+    mockEs.onmessage({ data: JSON.stringify({ type: 'done', count: 1 }) })
+
+    await promise
+    expect(onEvent).toHaveBeenCalledWith({ type: 'progress', message: 'http://example.com/' })
+    expect(mockEs.close).toHaveBeenCalled()
   })
 })
