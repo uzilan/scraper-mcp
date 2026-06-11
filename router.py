@@ -81,6 +81,7 @@ async def index_page_route(body: IndexPageBody) -> str:
 
 @app.post("/index/tree")
 async def index_tree_route(body: IndexTreeBody) -> str:
+    # log=None: REST clients cannot receive streaming progress updates
     result = await server._index_tree_tool(body.url, body.max_depth, body.force)
     _raise_if_error(result)
     return result

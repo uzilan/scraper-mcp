@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
 import pytest
 import server
@@ -74,9 +76,6 @@ async def test_current_namespace_set(client):
     response = await client.get("/namespaces/current")
     assert response.status_code == 200
     assert response.json() == "active"
-
-
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def _html_response(body: str) -> MagicMock:
