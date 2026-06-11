@@ -5,11 +5,13 @@ requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "chromadb>=1.5.9",
+    "fastapi>=0.115",
     "httpx>=0.28.1",
     "lxml>=6.1.1",
     "markdownify>=1.2.2",
     "mcp[cli]>=1.27.1",
     "tiktoken>=0.13.0",
+    "uvicorn>=0.34",
 ]
 
 [tool.uv]
