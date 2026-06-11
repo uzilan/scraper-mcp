@@ -62,7 +62,7 @@ function UrlLog({ urls }) {
     if (typeof bottomRef.current?.scrollIntoView === 'function') {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [urls.length])
+  }, [urls])
   return (
     <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
       {urls.map((msg, i) => (
