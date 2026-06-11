@@ -1,8 +1,8 @@
 const TOOLS = [
-  { id: 'search', label: 'Search' },
-  { id: 'index-page', label: 'Index Page' },
-  { id: 'index-tree', label: 'Index Tree' },
-  { id: 'discover', label: 'Discover Links' },
+  { id: 'search', label: 'Search', icon: '🔍' },
+  { id: 'index-page', label: 'Index Page', icon: '📄' },
+  { id: 'index-tree', label: 'Index Tree', icon: '🌲' },
+  { id: 'discover', label: 'Discover Links', icon: '🔗' },
 ]
 
 export default function ToolBar({ active, onChange }) {
@@ -21,7 +21,7 @@ export default function ToolBar({ active, onChange }) {
             onChange={() => onChange(t.id)}
             className="accent-sky-600"
           />
-          {t.label}
+          {t.icon} {t.label}
         </label>
       ))}
     </div>

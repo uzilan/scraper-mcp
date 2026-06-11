@@ -1,10 +1,10 @@
 import { useState } from 'react'
 
 const CONFIGS = {
-  'search':     { hint: 'Search across all indexed content',          placeholder: 'Search the indexed docs…',        btn: 'Search',   hasDepth: false },
-  'index-page': { hint: 'Index a single documentation page',          placeholder: 'https://docs.example.com/page',   btn: 'Index',    hasDepth: false },
-  'index-tree': { hint: 'Recursively index a full documentation site', placeholder: 'https://docs.example.com/',      btn: 'Index',    hasDepth: true  },
-  'discover':   { hint: 'Discover all reachable links on a domain',   placeholder: 'https://docs.example.com/',       btn: 'Discover', hasDepth: true  },
+  'search':     { hint: 'Search across all indexed content',          placeholder: 'Search the indexed docs…',        btn: '→', ariaLabel: 'Search',   hasDepth: false },
+  'index-page': { hint: 'Index a single documentation page',          placeholder: 'https://docs.example.com/page',   btn: '→', ariaLabel: 'Index',    hasDepth: false },
+  'index-tree': { hint: 'Recursively index a full documentation site', placeholder: 'https://docs.example.com/',      btn: '→', ariaLabel: 'Index',    hasDepth: true  },
+  'discover':   { hint: 'Discover all reachable links on a domain',   placeholder: 'https://docs.example.com/',       btn: '→', ariaLabel: 'Discover', hasDepth: true  },
 }
 
 export default function InputArea({ tool, onSubmit, disabled }) {
@@ -34,6 +34,7 @@ export default function InputArea({ tool, onSubmit, disabled }) {
         <button
           onClick={handleSubmit}
           disabled={disabled}
+          aria-label={config.ariaLabel}
           className="bg-sky-600 rounded-lg px-5 py-2 text-white text-sm disabled:opacity-50"
         >
           {config.btn}
