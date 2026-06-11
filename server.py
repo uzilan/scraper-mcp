@@ -215,16 +215,22 @@ async def _index_tree(
         response = await _fetch(current_url)
         if response is None:
             failed += 1
+            if log:
+                await log(f"[failed] {current_url}")
             continue
 
         try:
             ok, is_openapi, _ = await _index_response(collection, current_url, response)
         except Exception:
             failed += 1
+            if log:
+                await log(f"[failed] {current_url}")
             continue
 
         if ok:
             indexed += 1
+            if log:
+                await log(f"[indexed] {current_url}")
 
         if depth < max_depth and not is_openapi:
             _enqueue_links(response.text, current_url, depth, visited, queue)

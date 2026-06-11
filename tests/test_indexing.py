@@ -124,3 +124,21 @@ async def test_discover_links_same_domain_only():
     assert "http://example.com/page-a" in result
     assert "http://example.com/page-b" in result
     assert "http://other.com/external" not in result
+
+
+async def test_index_tree_log_indexed(ns):
+    url = "http://example.com/"
+    logged = []
+    async def collect(msg): logged.append(msg)
+    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await server._index_tree(ns, url, log=collect)
+    assert any("[indexed]" in m and url in m for m in logged)
+
+
+async def test_index_tree_log_failed_fetch(ns):
+    url = "http://example.com/"
+    logged = []
+    async def collect(msg): logged.append(msg)
+    with patch("server._fetch", new=AsyncMock(return_value=None)):
+        await server._index_tree(ns, url, log=collect)
+    assert any("[failed]" in m and url in m for m in logged)
