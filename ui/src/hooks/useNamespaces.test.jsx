@@ -63,4 +63,13 @@ describe('useNamespaces', () => {
     expect(api.deleteNamespace).toHaveBeenCalledWith('ns2')
     await waitFor(() => expect(result.current.namespaces).toHaveLength(1))
   })
+
+  it('sets error state when refresh fails', async () => {
+    api.listNamespaces.mockRejectedValue(new Error('Network error'))
+    api.currentNamespace.mockRejectedValue(new Error('Network error'))
+
+    const { result } = renderHook(() => useNamespaces())
+    await waitFor(() => expect(result.current.error).toBe('Network error'))
+    expect(result.current.namespaces).toEqual([])
+  })
 })

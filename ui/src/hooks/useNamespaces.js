@@ -4,29 +4,47 @@ import { listNamespaces, currentNamespace, createNamespace, useNamespace, delete
 export function useNamespaces() {
   const [namespaces, setNamespaces] = useState([])
   const [current, setCurrent] = useState(null)
+  const [error, setError] = useState(null)
 
   const refresh = useCallback(async () => {
-    const [all, curr] = await Promise.all([listNamespaces(), currentNamespace()])
-    setNamespaces(all)
-    setCurrent(curr)
+    try {
+      const [all, curr] = await Promise.all([listNamespaces(), currentNamespace()])
+      setNamespaces(all)
+      setCurrent(curr)
+      setError(null)
+    } catch (e) {
+      setError(e.message)
+    }
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
 
   const create = useCallback(async (name) => {
-    await createNamespace(name)
-    await refresh()
+    try {
+      await createNamespace(name)
+      await refresh()
+    } catch (e) {
+      setError(e.message)
+    }
   }, [refresh])
 
   const switchTo = useCallback(async (name) => {
-    await useNamespace(name)
-    await refresh()
+    try {
+      await useNamespace(name)
+      await refresh()
+    } catch (e) {
+      setError(e.message)
+    }
   }, [refresh])
 
   const remove = useCallback(async (name) => {
-    await deleteNamespace(name)
-    await refresh()
+    try {
+      await deleteNamespace(name)
+      await refresh()
+    } catch (e) {
+      setError(e.message)
+    }
   }, [refresh])
 
-  return { namespaces, current, create, switchTo, remove, refresh }
+  return { namespaces, current, error, create, switchTo, remove, refresh }
 }

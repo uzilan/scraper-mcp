@@ -6,8 +6,12 @@ export function usePages(current) {
 
   const refresh = useCallback(async () => {
     if (!current) { setPages([]); return }
-    const result = await listIndexedPages()
-    setPages(result)
+    try {
+      const result = await listIndexedPages()
+      setPages(result)
+    } catch {
+      setPages([])
+    }
   }, [current])
 
   useEffect(() => { refresh() }, [refresh])
