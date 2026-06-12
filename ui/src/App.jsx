@@ -16,9 +16,16 @@ export default function App() {
   const { documents, refresh: refreshDocuments } = useDocuments(current)
   const [tool, setTool] = useState('search')
   const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState('idle')
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const sidebarRef = useRef(null)
+  const statusTimer = useRef(null)
+
+  const setDone = useCallback(() => {
+    setStatus('done')
+    clearTimeout(statusTimer.current)
+    statusTimer.current = setTimeout(() => setStatus('idle'), 1500)
+  }, [])
 
   const handleDividerMouseDown = (e) => {
     e.preventDefault()
@@ -36,7 +43,7 @@ export default function App() {
   }
 
   const handleSubmit = useCallback(async ({ value, depth }) => {
-    setLoading(true)
+    setStatus('loading')
     const entry = { id: Date.now(), tool, query: value, depth, result: null, error: null, urls: [], status: 'done' }
 
     if (tool === 'index-tree' || tool === 'discover') {
@@ -69,7 +76,7 @@ export default function App() {
           e.id === entry.id ? { ...e, error: err.message, status: 'done' } : e
         ))
       }
-      setLoading(false)
+      setDone()
       return
     }
 
@@ -84,8 +91,8 @@ export default function App() {
       entry.error = e.message
     }
     setHistory(prev => [entry, ...prev])
-    setLoading(false)
-  }, [tool, refreshPages])
+    setDone()
+  }, [tool, refreshPages, setDone])
 
   return (
     <div className="bg-slate-950 text-slate-200 font-sans text-[13px] h-screen overflow-hidden flex">
@@ -124,7 +131,7 @@ export default function App() {
       />
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <ToolBar active={tool} onChange={setTool} />
-        <InputArea tool={tool} onSubmit={handleSubmit} disabled={loading} />
+        <InputArea tool={tool} onSubmit={handleSubmit} status={status} />
         <History entries={history} />
       </div>
     </div>

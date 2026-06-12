@@ -5,7 +5,7 @@ import InputArea from './InputArea'
 
 describe('InputArea — search tool', () => {
   it('shows free-text placeholder and Search button', () => {
-    render(<InputArea tool="search" onSubmit={vi.fn()} disabled={false} />)
+    render(<InputArea tool="search" onSubmit={vi.fn()} status="idle" />)
     expect(screen.getByPlaceholderText('Search the indexed docs…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Depth')).not.toBeInTheDocument()
@@ -13,7 +13,7 @@ describe('InputArea — search tool', () => {
 
   it('calls onSubmit with value and null depth on button click', async () => {
     const onSubmit = vi.fn()
-    render(<InputArea tool="search" onSubmit={onSubmit} disabled={false} />)
+    render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'bearer token')
     await userEvent.click(screen.getByRole('button', { name: 'Search' }))
     expect(onSubmit).toHaveBeenCalledWith({ value: 'bearer token', depth: null })
@@ -21,16 +21,16 @@ describe('InputArea — search tool', () => {
 
   it('calls onSubmit on Enter key', async () => {
     const onSubmit = vi.fn()
-    render(<InputArea tool="search" onSubmit={onSubmit} disabled={false} />)
+    render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'rate limiting{Enter}')
     expect(onSubmit).toHaveBeenCalledWith({ value: 'rate limiting', depth: null })
   })
 
   it('does not call onSubmit when disabled and Enter is pressed', async () => {
     const onSubmit = vi.fn()
-    const { rerender } = render(<InputArea tool="search" onSubmit={onSubmit} disabled={false} />)
+    const { rerender } = render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'some query')
-    rerender(<InputArea tool="search" onSubmit={onSubmit} disabled={true} />)
+    rerender(<InputArea tool="search" onSubmit={onSubmit} status="loading" />)
     await userEvent.keyboard('{Enter}')
     expect(onSubmit).not.toHaveBeenCalled()
   })
@@ -38,7 +38,7 @@ describe('InputArea — search tool', () => {
 
 describe('InputArea — index-page tool', () => {
   it('shows URL placeholder and Index button, no depth', () => {
-    render(<InputArea tool="index-page" onSubmit={vi.fn()} disabled={false} />)
+    render(<InputArea tool="index-page" onSubmit={vi.fn()} status="idle" />)
     expect(screen.getByPlaceholderText('https://docs.example.com/page')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Index' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Depth')).not.toBeInTheDocument()
@@ -47,13 +47,13 @@ describe('InputArea — index-page tool', () => {
 
 describe('InputArea — index-tree tool', () => {
   it('shows depth input defaulting to 2', () => {
-    render(<InputArea tool="index-tree" onSubmit={vi.fn()} disabled={false} />)
+    render(<InputArea tool="index-tree" onSubmit={vi.fn()} status="idle" />)
     expect(screen.getByDisplayValue('2')).toBeInTheDocument()
   })
 
   it('calls onSubmit with depth value', async () => {
     const onSubmit = vi.fn()
-    render(<InputArea tool="index-tree" onSubmit={onSubmit} disabled={false} />)
+    render(<InputArea tool="index-tree" onSubmit={onSubmit} status="idle" />)
     await userEvent.clear(screen.getByDisplayValue('2'))
     await userEvent.type(screen.getByRole('spinbutton'), '3')
     await userEvent.type(screen.getByPlaceholderText('https://docs.example.com/'), 'https://docs.example.com/{Enter}')
@@ -63,7 +63,7 @@ describe('InputArea — index-tree tool', () => {
 
 describe('InputArea — discover tool', () => {
   it('shows depth input and Discover button', () => {
-    render(<InputArea tool="discover" onSubmit={vi.fn()} disabled={false} />)
+    render(<InputArea tool="discover" onSubmit={vi.fn()} status="idle" />)
     expect(screen.getByRole('button', { name: 'Discover' })).toBeInTheDocument()
     expect(screen.getByDisplayValue('2')).toBeInTheDocument()
   })

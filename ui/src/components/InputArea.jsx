@@ -7,10 +7,18 @@ const CONFIGS = {
   'discover':   { hint: 'Discover all reachable links on a domain',   placeholder: 'https://docs.example.com/',       btn: '→', ariaLabel: 'Discover', hasDepth: true  },
 }
 
-export default function InputArea({ tool, onSubmit, disabled }) {
+const BTN_STATE = {
+  idle:    { label: '→', cls: 'bg-sky-600' },
+  loading: { label: '…', cls: 'bg-sky-800 animate-pulse' },
+  done:    { label: '✓', cls: 'bg-emerald-600' },
+}
+
+export default function InputArea({ tool, onSubmit, status = 'idle' }) {
   const [value, setValue] = useState('')
   const [depth, setDepth] = useState(2)
   const config = CONFIGS[tool]
+  const disabled = status === 'loading'
+  const btn = BTN_STATE[status] ?? BTN_STATE.idle
 
   const handleSubmit = () => {
     const v = value.trim()
@@ -35,9 +43,9 @@ export default function InputArea({ tool, onSubmit, disabled }) {
           onClick={handleSubmit}
           disabled={disabled}
           aria-label={config.ariaLabel}
-          className="bg-sky-600 rounded-lg px-5 py-2 text-white text-sm disabled:opacity-50"
+          className={`${btn.cls} rounded-lg px-5 py-2 text-white text-sm transition-colors disabled:opacity-70`}
         >
-          {config.btn}
+          {btn.label}
         </button>
       </div>
       {config.hasDepth && (
