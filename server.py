@@ -134,6 +134,7 @@ def _use_namespace(client: chromadb.api.ClientAPI, name: str) -> str:
 
 
 def _delete_namespace(client: chromadb.api.ClientAPI, name: str) -> str:
+    import shutil
     global _current_collection
     try:
         client.delete_collection(name)
@@ -141,6 +142,9 @@ def _delete_namespace(client: chromadb.api.ClientAPI, name: str) -> str:
         return f"Namespace '{name}' does not exist."
     if _current_collection is not None and _current_collection.name == name:
         _current_collection = None
+    uploads_folder = UPLOADS_PATH / name
+    if uploads_folder.exists():
+        shutil.rmtree(uploads_folder)
     return f"Namespace '{name}' deleted."
 
 

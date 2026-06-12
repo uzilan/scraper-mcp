@@ -162,3 +162,14 @@ def test_delete_document_removes_file_and_chromadb(ns, tmp_uploads):
 def test_delete_document_not_found(ns, tmp_uploads):
     result = server._delete_document(ns, "test-ns", "ghost.txt")
     assert "not found" in result.lower()
+
+
+def test_delete_namespace_removes_uploads_folder(tmp_uploads):
+    folder = tmp_uploads / "to-delete"
+    folder.mkdir()
+    (folder / "file.txt").write_text("content", encoding="utf-8")
+
+    server._create_namespace(server._chroma_client, "to-delete")
+    server._delete_namespace(server._chroma_client, "to-delete")
+
+    assert not folder.exists()
