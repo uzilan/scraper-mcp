@@ -12,6 +12,7 @@ describe('App', () => {
     api.listNamespaces.mockResolvedValue(['test-ns'])
     api.currentNamespace.mockResolvedValue('test-ns')
     api.listIndexedPages.mockResolvedValue([])
+    api.listDocuments.mockResolvedValue([])
     api.searchDocs.mockResolvedValue({ results: [], references: [] })
     api.indexPage.mockResolvedValue('Indexed.')
     api.indexTree.mockResolvedValue('Indexed tree.')

@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef } from 'react'
 import NamespacePanel from './components/NamespacePanel'
 import PagesList from './components/PagesList'
+import DocumentsList from './components/DocumentsList'
 import ToolBar from './components/ToolBar'
 import InputArea from './components/InputArea'
 import History from './components/History'
 import { useNamespaces } from './hooks/useNamespaces'
 import { usePages } from './hooks/usePages'
+import { useDocuments } from './hooks/useDocuments'
 import * as api from './api'
 
 export default function App() {
   const { namespaces, current, create, switchTo, remove } = useNamespaces()
   const { pages, refresh: refreshPages } = usePages(current)
+  const { documents, refresh: refreshDocuments } = useDocuments(current)
   const [tool, setTool] = useState('search')
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
@@ -93,6 +96,25 @@ export default function App() {
           onCreate={create}
           onSwitch={switchTo}
           onDelete={remove}
+        />
+        <DocumentsList
+          documents={documents}
+          onUpload={async (file) => {
+            try {
+              await api.uploadDocument(file)
+              refreshDocuments()
+            } catch {
+              // silent — file may be unsupported
+            }
+          }}
+          onDelete={async (name) => {
+            try {
+              await api.deleteDocument(name)
+              refreshDocuments()
+            } catch {
+              // silent
+            }
+          }}
         />
         <PagesList pages={pages} />
       </div>
