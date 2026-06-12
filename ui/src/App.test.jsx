@@ -30,10 +30,12 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('test-ns')).toBeInTheDocument())
   })
 
-  it('shows indexed page link after mount', async () => {
+  it('shows indexed page link after expanding domain', async () => {
     api.listIndexedPages.mockResolvedValue([{ url: 'https://docs.example.com/page', chunks: 3 }])
     render(<App />)
-    await waitFor(() => expect(screen.getByRole('link', { name: 'https://docs.example.com/page' })).toBeInTheDocument())
+    await waitFor(() => screen.getByText('docs.example.com'))
+    await userEvent.click(screen.getByText('docs.example.com'))
+    expect(screen.getByRole('link', { name: 'page' })).toBeInTheDocument()
   })
 
   it('adds a search result to history on submit', async () => {
