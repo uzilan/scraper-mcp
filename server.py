@@ -438,6 +438,34 @@ def _index_file(collection: chromadb.Collection, namespace: str, path: Path) -> 
     return f"Indexed {len(chunks_list)} chunks from {path.name}" if ok else f"No content extracted from {path.name}"
 
 
+def _list_documents(namespace: str) -> list[dict]:
+    import mimetypes
+    folder = UPLOADS_PATH / namespace
+    if not folder.exists():
+        return []
+    return [
+        {
+            "name": f.name,
+            "size": f.stat().st_size,
+            "content_type": mimetypes.guess_type(f.name)[0] or "application/octet-stream",
+        }
+        for f in sorted(folder.iterdir())
+        if f.is_file()
+    ]
+
+
+def _delete_document(collection: chromadb.Collection, namespace: str, filename: str) -> str:
+    path = UPLOADS_PATH / namespace / filename
+    source_url = f"file://{namespace}/{filename}"
+    existing = collection.get(where={"source_url": source_url})
+    if existing["ids"]:
+        collection.delete(ids=existing["ids"])
+    if path.exists():
+        path.unlink()
+        return f"Deleted {filename}"
+    return f"File {filename} not found"
+
+
 # ---------------------------------------------------------------------------
 # OpenAPI / Swagger helpers
 # ---------------------------------------------------------------------------
