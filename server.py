@@ -106,6 +106,20 @@ def clear_index() -> str:
 
 
 @mcp.tool()
+def upload_document(filename: str, content_b64: str) -> str:
+    """Upload a document to the current namespace and index it for search. content_b64 must be base64-encoded file content."""
+    import base64
+    if _current_collection is None:
+        return "No namespace selected. Call use_namespace(name) first."
+    namespace = _current_collection.name
+    folder = UPLOADS_PATH / namespace
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / filename
+    path.write_bytes(base64.b64decode(content_b64))
+    return _index_file(_current_collection, namespace, path)
+
+
+@mcp.tool()
 def search_docs(query: str, n_results: int = 5) -> dict:
     """Search the active namespace. Returns relevant chunks with source URLs and a deduplicated references list."""
     return _search_docs_tool(query, n_results)
