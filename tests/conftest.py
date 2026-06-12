@@ -13,3 +13,9 @@ def reset_state():
     yield
     server._chroma_client = None
     server._current_collection = None
+
+
+@pytest.fixture
+def tmp_uploads(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "UPLOADS_PATH", tmp_path)
+    return tmp_path
