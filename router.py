@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import chromadb
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -152,6 +152,45 @@ def clear_index_route() -> str:
     if server._current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
     return server._clear_index(server._current_collection)
+
+
+@app.post("/documents")
+async def upload_document_route(file: UploadFile = File(...)) -> str:
+    if server._current_collection is None:
+        raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
+    namespace = server._current_collection.name
+    folder = server.UPLOADS_PATH / namespace
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / file.filename
+    path.write_bytes(await file.read())
+    result = server._index_file(server._current_collection, namespace, path)
+    if "not supported" in result.lower() or result.startswith("Unsupported") or "No content extracted" in result:
+        raise HTTPException(status_code=400, detail=result)
+    return result
+
+
+@app.get("/documents")
+def list_documents_route() -> list[dict]:
+    if server._current_collection is None:
+        return []
+    return server._list_documents(server._current_collection.name)
+
+
+@app.delete("/documents/{filename}")
+def delete_document_route(filename: str) -> str:
+    if server._current_collection is None:
+        raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
+    return server._delete_document(server._current_collection, server._current_collection.name, filename)
+
+
+@app.get("/documents/{filename}")
+def serve_document_route(filename: str):
+    if server._current_collection is None:
+        raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
+    path = server.UPLOADS_PATH / server._current_collection.name / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"{filename} not found")
+    return FileResponse(path)
 
 
 @app.get("/search")

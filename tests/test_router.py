@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -235,3 +236,70 @@ async def test_discover_links_stream_success(client):
 
     assert events[-1]["type"] == "done"
     assert any(e["type"] == "progress" and "example.com" in e["message"] for e in events)
+
+
+@pytest.fixture
+async def doc_client(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'UPLOADS_PATH', tmp_path)
+    await client.post("/namespaces", json={"name": "doc-ns"})
+    return client, tmp_path
+
+
+async def test_upload_document_no_namespace(client):
+    content = b"hello world document content"
+    response = await client.post(
+        "/documents",
+        files={"file": ("test.txt", content, "text/plain")},
+    )
+    assert response.status_code == 400
+
+
+async def test_upload_document_txt(doc_client):
+    client, _ = doc_client
+    content = b"This is documentation content for the test."
+    response = await client.post(
+        "/documents",
+        files={"file": ("readme.txt", content, "text/plain")},
+    )
+    assert response.status_code == 200
+    assert "Indexed" in response.json()
+
+
+async def test_list_documents_no_namespace(client):
+    response = await client.get("/documents")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_list_documents_after_upload(doc_client):
+    client, _ = doc_client
+    content = b"Some content here for testing."
+    await client.post("/documents", files={"file": ("notes.txt", content, "text/plain")})
+    response = await client.get("/documents")
+    assert response.status_code == 200
+    docs = response.json()
+    assert any(d["name"] == "notes.txt" for d in docs)
+
+
+async def test_delete_document(doc_client):
+    client, _ = doc_client
+    content = b"Content to delete eventually."
+    await client.post("/documents", files={"file": ("todelete.txt", content, "text/plain")})
+    response = await client.delete("/documents/todelete.txt")
+    assert response.status_code == 200
+    assert "Deleted" in response.json()
+
+
+async def test_serve_document(doc_client):
+    client, _ = doc_client
+    content = b"Serve this content back to the client."
+    await client.post("/documents", files={"file": ("serve.txt", content, "text/plain")})
+    response = await client.get("/documents/serve.txt")
+    assert response.status_code == 200
+    assert response.content == content
+
+
+async def test_serve_document_not_found(doc_client):
+    client, _ = doc_client
+    response = await client.get("/documents/ghost.txt")
+    assert response.status_code == 404
