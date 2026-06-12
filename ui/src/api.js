@@ -77,3 +77,21 @@ export function discoverLinksStream(url, maxDepth = 2, onEvent) {
     es.onerror = () => { es.close(); reject(new Error('Stream error')) }
   })
 }
+
+export function uploadDocument(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return _fetch('/documents', { method: 'POST', body: form })
+}
+
+export function listDocuments() {
+  return _fetch('/documents')
+}
+
+export function deleteDocument(name) {
+  return _fetch(`/documents/${encodeURIComponent(name)}`, { method: 'DELETE', headers: JSON_HEADERS })
+}
+
+export function getDocumentUrl(name) {
+  return `/documents/${encodeURIComponent(name)}`
+}

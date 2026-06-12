@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   listNamespaces, currentNamespace, createNamespace, useNamespace, deleteNamespace,
   listIndexedPages, indexPage, indexTree, searchDocs, discoverLinks,
-  indexTreeStream, discoverLinksStream,
+  indexTreeStream, discoverLinksStream, uploadDocument, listDocuments, deleteDocument, getDocumentUrl,
 } from './api'
 
 const mockFetch = vi.fn()
@@ -133,6 +133,7 @@ describe('discoverLinks', () => {
 
 describe('indexTreeStream', () => {
   let mockEs
+  const originalEventSource = globalThis.EventSource
 
   beforeEach(() => {
     mockEs = { onmessage: null, onerror: null, close: vi.fn() }
@@ -140,7 +141,9 @@ describe('indexTreeStream', () => {
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    if (originalEventSource) {
+      vi.stubGlobal('EventSource', originalEventSource)
+    }
   })
 
   it('opens EventSource at /index/tree/stream with params', () => {
@@ -173,6 +176,7 @@ describe('indexTreeStream', () => {
 
 describe('discoverLinksStream', () => {
   let mockEs
+  const originalEventSource = globalThis.EventSource
 
   beforeEach(() => {
     mockEs = { onmessage: null, onerror: null, close: vi.fn() }
@@ -180,7 +184,9 @@ describe('discoverLinksStream', () => {
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    if (originalEventSource) {
+      vi.stubGlobal('EventSource', originalEventSource)
+    }
   })
 
   it('opens EventSource at /links/stream with params', () => {
@@ -207,5 +213,44 @@ describe('discoverLinksStream', () => {
     mockEs.onerror()
     await expect(promise).rejects.toThrow('Stream error')
     expect(mockEs.close).toHaveBeenCalled()
+  })
+})
+
+describe('uploadDocument', () => {
+  it('POSTs FormData to /documents', async () => {
+    mockOk('Indexed 2 chunks from report.txt')
+    const file = new File(['hello'], 'report.txt', { type: 'text/plain' })
+    const result = await uploadDocument(file)
+    expect(result).toContain('Indexed')
+    expect(mockFetch).toHaveBeenCalledWith('/documents', expect.objectContaining({ method: 'POST' }))
+    const body = mockFetch.mock.calls[0][1].body
+    expect(body).toBeInstanceOf(FormData)
+  })
+})
+
+describe('listDocuments', () => {
+  it('GETs /documents and returns array', async () => {
+    mockOk([{ name: 'guide.pdf', size: 1234, content_type: 'application/pdf' }])
+    const result = await listDocuments()
+    expect(mockFetch).toHaveBeenCalledWith('/documents', undefined)
+    expect(result[0].name).toBe('guide.pdf')
+  })
+})
+
+describe('deleteDocument', () => {
+  it('DELETEs /documents/{name}', async () => {
+    mockOk('Deleted guide.pdf')
+    await deleteDocument('guide.pdf')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/documents/guide.pdf',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+})
+
+describe('getDocumentUrl', () => {
+  it('returns encoded path', () => {
+    expect(getDocumentUrl('my file.pdf')).toBe('/documents/my%20file.pdf')
+    expect(getDocumentUrl('api.json')).toBe('/documents/api.json')
   })
 })
