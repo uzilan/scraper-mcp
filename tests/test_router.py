@@ -303,3 +303,9 @@ async def test_serve_document_not_found(doc_client):
     client, _ = doc_client
     response = await client.get("/documents/ghost.txt")
     assert response.status_code == 404
+
+
+async def test_delete_document_not_found(doc_client):
+    client, _ = doc_client
+    response = await client.delete("/documents/nonexistent.txt")
+    assert response.status_code == 404

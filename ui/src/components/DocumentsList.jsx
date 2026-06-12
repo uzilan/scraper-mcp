@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { getDocumentUrl } from '../api'
 
 const OPEN_IN_BROWSER = new Set(['.pdf', '.txt', '.md', '.json', '.yaml', '.yml'])
 
@@ -60,7 +61,7 @@ export default function DocumentsList({ documents, onUpload, onDelete }) {
       <div className="flex flex-col gap-0.5">
         {documents.map((doc) => {
           const ext = getExt(doc.name)
-          const url = `/documents/${encodeURIComponent(doc.name)}`
+          const url = getDocumentUrl(doc.name)
           const openInBrowser = OPEN_IN_BROWSER.has(ext)
           return (
             <div key={doc.name} className="flex items-center gap-1 group">

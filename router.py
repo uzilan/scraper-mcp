@@ -161,7 +161,8 @@ async def upload_document_route(file: UploadFile = File(...)) -> str:
     namespace = server._current_collection.name
     folder = server.UPLOADS_PATH / namespace
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / file.filename
+    safe_name = Path(file.filename).name
+    path = folder / safe_name
     path.write_bytes(await file.read())
     result = server._index_file(server._current_collection, namespace, path)
     if "not supported" in result.lower() or result.startswith("Unsupported") or "No content extracted" in result:
@@ -180,7 +181,16 @@ def list_documents_route() -> list[dict]:
 def delete_document_route(filename: str) -> str:
     if server._current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
-    return server._delete_document(server._current_collection, server._current_collection.name, filename)
+    safe_filename = Path(filename).name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = server.UPLOADS_PATH / server._current_collection.name / safe_filename
+    if not path.resolve().is_relative_to((server.UPLOADS_PATH / server._current_collection.name).resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    result = server._delete_document(server._current_collection, server._current_collection.name, safe_filename)
+    if "not found" in result.lower():
+        raise HTTPException(status_code=404, detail=result)
+    return result
 
 
 @app.get("/documents/{filename}")
@@ -188,6 +198,8 @@ def serve_document_route(filename: str):
     if server._current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
     path = server.UPLOADS_PATH / server._current_collection.name / filename
+    if not path.resolve().is_relative_to((server.UPLOADS_PATH / server._current_collection.name).resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"{filename} not found")
     return FileResponse(path)
