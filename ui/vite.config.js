@@ -15,6 +15,9 @@ export default defineConfig({
       '/index': 'http://localhost:8000',
       '/search': 'http://localhost:8000',
       '/links': 'http://localhost:8000',
+      '/documents': 'http://localhost:8000',
+      '/swagger-ui': 'http://localhost:8000',
+      '/proxy': 'http://localhost:8000',
     },
   },
 })
