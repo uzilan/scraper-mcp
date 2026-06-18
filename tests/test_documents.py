@@ -101,6 +101,18 @@ def test_index_file_plain_json(ns, tmp_uploads):
     assert ns.count() > 0
 
 
+def test_index_file_openapi_json_sets_is_openapi_flag(ns, tmp_uploads):
+    spec = {
+        "openapi": "3.0.0",
+        "info": {"title": "Test API"},
+        "paths": {"/items": {"get": {"operationId": "listItems", "summary": "List"}}},
+    }
+    path = _write(tmp_uploads, "api.json", json.dumps(spec))
+    server._index_file(ns, "test-ns", path)
+    metas = ns.get(where={"source_url": "file://test-ns/api.json"})["metadatas"]
+    assert all(m.get("is_openapi") is True for m in metas)
+
+
 def test_index_file_unsupported_doc(ns, tmp_uploads):
     path = tmp_uploads / "old.doc"
     path.write_bytes(b"\xd0\xcf binary")
@@ -162,6 +174,42 @@ def test_delete_document_removes_file_and_chromadb(ns, tmp_uploads):
 def test_delete_document_not_found(ns, tmp_uploads):
     result = server._delete_document(ns, "test-ns", "ghost.txt")
     assert "not found" in result.lower()
+
+
+def test_index_same_file_in_two_namespaces(tmp_uploads):
+    """Same filename uploaded to two different namespaces must not conflict."""
+    server._create_namespace(server._chroma_client, "ns-alpha")
+    ns_alpha = server._current_collection
+
+    path_a = tmp_uploads / "ns-alpha"
+    path_a.mkdir(exist_ok=True)
+    file_a = _write(path_a, "notes.txt", "Content for alpha namespace.")
+    result_a = server._index_file(ns_alpha, "ns-alpha", file_a)
+    assert "Indexed" in result_a
+
+    server._create_namespace(server._chroma_client, "ns-beta")
+    ns_beta = server._current_collection
+
+    path_b = tmp_uploads / "ns-beta"
+    path_b.mkdir(exist_ok=True)
+    file_b = _write(path_b, "notes.txt", "Content for beta namespace.")
+    result_b = server._index_file(ns_beta, "ns-beta", file_b)
+    assert "Indexed" in result_b
+
+    # Each namespace has its own independent index
+    assert ns_alpha.get(where={"source_url": "file://ns-alpha/notes.txt"})["ids"] != []
+    assert ns_beta.get(where={"source_url": "file://ns-beta/notes.txt"})["ids"] != []
+
+
+def test_reupload_same_file_same_namespace_is_idempotent(ns, tmp_uploads):
+    """Re-uploading the same file to the same namespace must succeed (no UniqueConstraintError)."""
+    path = _write(tmp_uploads, "notes.txt", "Original content here.")
+    server._index_file(ns, "test-ns", path)
+    count_after_first = ns.count()
+
+    result = server._index_file(ns, "test-ns", path)
+    assert "Indexed" in result
+    assert ns.count() == count_after_first
 
 
 def test_delete_namespace_removes_uploads_folder(tmp_uploads):

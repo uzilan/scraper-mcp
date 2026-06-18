@@ -120,6 +120,22 @@ def upload_document(filename: str, content_b64: str) -> str:
 
 
 @mcp.tool()
+def list_documents() -> list[dict]:
+    """List uploaded documents in the current namespace."""
+    if _current_collection is None:
+        return []
+    return _list_documents(_current_collection.name)
+
+
+@mcp.tool()
+def delete_document(filename: str) -> str:
+    """Delete an uploaded document from the current namespace and remove it from the index."""
+    if _current_collection is None:
+        return "No namespace selected. Call use_namespace(name) first."
+    return _delete_document(_current_collection, _current_collection.name, filename)
+
+
+@mcp.tool()
 def search_docs(query: str, n_results: int = 5) -> dict:
     """Search the active namespace. Returns relevant chunks with source URLs and a deduplicated references list."""
     return _search_docs_tool(query, n_results)
@@ -213,6 +229,11 @@ async def _index_tree(
     log=None,
 ) -> str:
     visited: set[str] = set()
+    # Pages discovered via plain-text/markdown links are treated as leaves:
+    # they are indexed but their HTML links are not followed. This prevents
+    # the combinatorial explosion when starting from llms.txt-style files
+    # that list hundreds of doc pages, each with many navigation links.
+    markdown_discovered: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(url, 0)])
     indexed, skipped, failed = 0, 0, 0
 
@@ -221,14 +242,19 @@ async def _index_tree(
         if current_url in visited:
             continue
         visited.add(current_url)
+        is_leaf = current_url in markdown_discovered
 
         if not force and _is_indexed(collection, current_url):
             skipped += 1
             if log:
                 await log(f"[skipped] {current_url}")
-            response = await _fetch(current_url)
-            if response and depth < max_depth and "json" not in response.headers.get("content-type", ""):
-                _enqueue_links(response.text, current_url, depth, visited, queue)
+            if not is_leaf and depth < max_depth:
+                response = await _fetch(current_url)
+                if response:
+                    if _is_html(response):
+                        _enqueue_links(response.text, current_url, depth, visited, queue)
+                    elif _is_plain_text(response):
+                        _enqueue_markdown_links(response.text, depth, visited, queue, markdown_discovered)
             continue
 
         response = await _fetch(current_url)
@@ -251,8 +277,11 @@ async def _index_tree(
             if log:
                 await log(f"[indexed] {current_url}")
 
-        if depth < max_depth and not is_openapi:
-            _enqueue_links(response.text, current_url, depth, visited, queue)
+        if not is_leaf and depth < max_depth and not is_openapi:
+            if _is_html(response):
+                _enqueue_links(response.text, current_url, depth, visited, queue)
+            elif _is_plain_text(response):
+                _enqueue_markdown_links(response.text, depth, visited, queue, markdown_discovered)
 
     return f"Indexed {indexed} pages ({skipped} skipped, {failed} failed) starting from {url}"
 
@@ -262,10 +291,16 @@ def _list_indexed_pages(collection: chromadb.Collection) -> list[dict]:
         return []
     metadatas = collection.get()["metadatas"]
     counts: dict[str, int] = {}
+    openapi_urls: set[str] = set()
     for meta in metadatas:
         url = meta.get("source_url", "unknown")
         counts[url] = counts.get(url, 0) + 1
-    return [{"url": url, "chunks": n} for url, n in sorted(counts.items())]
+        if meta.get("is_openapi"):
+            openapi_urls.add(url)
+    return [
+        {"url": url, "chunks": n, "is_openapi": url in openapi_urls}
+        for url, n in sorted(counts.items())
+    ]
 
 
 def _clear_index(collection: chromadb.Collection) -> str:
@@ -315,6 +350,7 @@ def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5
 
 async def _discover_links(url: str, max_depth: int = 2, log=None) -> list[str]:
     visited: set[str] = set()
+    markdown_discovered: set[str] = set()
     queue: deque[tuple[str, int]] = deque([(url, 0)])
     found: list[str] = []
 
@@ -327,12 +363,30 @@ async def _discover_links(url: str, max_depth: int = 2, log=None) -> list[str]:
         if log:
             await log(current_url)
 
-        if depth < max_depth:
+        is_leaf = current_url in markdown_discovered
+        if not is_leaf and depth < max_depth:
             response = await _fetch(current_url)
-            if response and "json" not in response.headers.get("content-type", ""):
-                _enqueue_links(response.text, current_url, depth, visited, queue)
+            if response:
+                if _is_html(response):
+                    _enqueue_links(response.text, current_url, depth, visited, queue)
+                elif _is_plain_text(response):
+                    _enqueue_markdown_links(response.text, depth, visited, queue, markdown_discovered)
 
     return found
+
+
+def _extract_markdown_links(text: str) -> list[str]:
+    return re.findall(r'\[[^\]]*\]\((https?://[^)]+)\)', text)
+
+
+def _enqueue_markdown_links(
+    text: str, depth: int, visited: set, queue: deque, markdown_discovered: set | None = None
+) -> None:
+    for link in _extract_markdown_links(text):
+        if link not in visited:
+            if markdown_discovered is not None:
+                markdown_discovered.add(link)
+            queue.append((link, depth + 1))
 
 
 def _enqueue_links(html: str, base_url: str, depth: int, visited: set, queue: deque) -> None:
@@ -500,6 +554,16 @@ def _is_openapi(response: httpx.Response) -> bool:
         return False
 
 
+def _is_html(response: httpx.Response) -> bool:
+    ct = response.headers.get("content-type", "")
+    return "text/html" in ct or (not ct)
+
+
+def _is_plain_text(response: httpx.Response) -> bool:
+    ct = response.headers.get("content-type", "")
+    return "text/plain" in ct or "text/markdown" in ct
+
+
 def _is_indexed(collection: chromadb.Collection, url: str) -> bool:
     return bool(collection.get(where={"source_url": url})["ids"])
 
@@ -515,8 +579,10 @@ def _upsert(
         return False
     existing = collection.get(where={"source_url": url})
     if existing["ids"]:
-        collection.delete(ids=existing["ids"])
-    collection.add(documents=documents, ids=ids, metadatas=metadatas)
+        stale = set(existing["ids"]) - set(ids)
+        if stale:
+            collection.delete(ids=list(stale))
+    collection.upsert(documents=documents, ids=ids, metadatas=metadatas)
     return True
 
 
@@ -526,6 +592,11 @@ async def _index_response(
     if _is_openapi(response):
         docs, ids, metas = _openapi_documents(response.json(), url)
         return _upsert(collection, docs, ids, metas, url), True, []
+    if _is_plain_text(response):
+        chunks = chunk(response.text)
+        ids = [f"{url}::{i}" for i in range(len(chunks))]
+        metas = [{"source_url": url} for _ in chunks]
+        return _upsert(collection, chunks, ids, metas, url), False, []
     html = response.text
     swagger_spec_urls = []
     for swagger_ui_url in _extract_swagger_ui_links(html, url):
@@ -618,7 +689,7 @@ def _openapi_documents(spec: dict, url: str) -> tuple[list[str], list[str], list
             ]))
             documents.append(text)
             ids.append(f"{url}::{op_id}")
-            metadatas.append({"source_url": url, "path": path, "method": method})
+            metadatas.append({"source_url": url, "path": path, "method": method, "is_openapi": True})
     return documents, ids, metadatas
 
 
@@ -686,17 +757,44 @@ import uvicorn
 
 async def _run_all() -> None:
     from router import app as http_app
+
     port = int(os.environ.get("HTTP_PORT", "8000"))
-    config = uvicorn.Config(http_app, host="0.0.0.0", port=port, log_level="info")
+    config = uvicorn.Config(http_app, host="0.0.0.0", port=port, log_level="error", access_log=False)
     http_server = uvicorn.Server(config)
-    await asyncio.gather(
-        mcp.run_stdio_async(),
-        http_server.serve(),
-    )
+
+    mcp_task = asyncio.create_task(mcp.run_stdio_async())
+    http_task = asyncio.create_task(http_server.serve())
+
+    try:
+        # Exit as soon as either service stops (Ctrl+C stops uvicorn first)
+        await asyncio.wait([mcp_task, http_task], return_when=asyncio.FIRST_COMPLETED)
+
+        # Cancel whichever is still running; give it 2 s to clean up
+        for task in (mcp_task, http_task):
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+                except Exception:
+                    pass
+    finally:
+        # Always force-exit: covers both clean shutdown and a second Ctrl+C that
+        # cancels this coroutine before os._exit would otherwise be reached.
+        # The MCP stdio task may be stuck on a blocking stdin read that asyncio
+        # cancellation cannot interrupt, so we must not rely on normal cleanup.
+        os._exit(0)
 
 
 def main() -> None:
-    asyncio.run(_run_all())
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        if os.environ.get("MCP_ONLY"):
+            asyncio.run(mcp.run_stdio_async())
+        else:
+            asyncio.run(_run_all())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
 
 
 if __name__ == "__main__":

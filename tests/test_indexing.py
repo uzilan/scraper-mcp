@@ -35,6 +35,14 @@ def make_html_response(body: str) -> MagicMock:
     return resp
 
 
+def make_plain_response(body: str) -> MagicMock:
+    resp = MagicMock()
+    resp.text = body
+    resp.headers = {"content-type": "text/plain"}
+    resp.json.side_effect = Exception("not json")
+    return resp
+
+
 def make_json_response(body: dict) -> MagicMock:
     resp = MagicMock()
     resp.text = json.dumps(body)
@@ -153,3 +161,78 @@ async def test_discover_links_log_callback():
         result = await server._discover_links(url, max_depth=0, log=collect)
     assert url in logged
     assert url in result
+
+
+LLMS_TXT = """# Example Docs
+
+- [Page A](http://example.com/page-a): Doc page A
+- [Page B](http://example.com/page-b): Doc page B
+"""
+
+PAGE_WITH_NAV = """
+<html><body>
+<nav><a href="/nav-1">Nav 1</a><a href="/nav-2">Nav 2</a></nav>
+<h1>Content</h1>
+</body></html>
+"""
+
+
+async def test_index_tree_llms_txt_does_not_follow_html_links(ns):
+    """Pages discovered via llms.txt markdown links are treated as leaves:
+    their HTML nav links must not be followed even when depth allows it."""
+    fetched = []
+
+    async def mock_fetch(u):
+        fetched.append(u)
+        if u == "http://example.com/llms.txt":
+            return make_plain_response(LLMS_TXT)
+        return make_html_response(PAGE_WITH_NAV)
+
+    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+        result = await server._index_tree(ns, "http://example.com/llms.txt", max_depth=2)
+
+    indexed_urls = {m["source_url"] for m in ns.get()["metadatas"]}
+    assert "http://example.com/llms.txt" in indexed_urls
+    assert "http://example.com/page-a" in indexed_urls
+    assert "http://example.com/page-b" in indexed_urls
+    # nav links from page-a / page-b must NOT be indexed
+    assert "http://example.com/nav-1" not in indexed_urls
+    assert "http://example.com/nav-2" not in indexed_urls
+
+
+async def test_list_indexed_pages_flags_openapi(ns):
+    url = "http://example.com/openapi.json"
+    with patch("server._fetch", new=AsyncMock(return_value=make_json_response(OPENAPI_SPEC))):
+        await server._index_page(ns, url)
+    pages = server._list_indexed_pages(ns)
+    assert len(pages) == 1
+    assert pages[0]["url"] == url
+    assert pages[0]["is_openapi"] is True
+
+
+async def test_list_indexed_pages_html_not_openapi(ns):
+    url = "http://example.com/docs"
+    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await server._index_page(ns, url)
+    pages = server._list_indexed_pages(ns)
+    assert len(pages) == 1
+    assert pages[0]["is_openapi"] is False
+
+
+async def test_discover_links_llms_txt_does_not_follow_html_links():
+    """discover_links starting from a plain-text file must not expand
+    HTML nav links from the pages the file lists."""
+
+    async def mock_fetch(u):
+        if u == "http://example.com/llms.txt":
+            return make_plain_response(LLMS_TXT)
+        return make_html_response(PAGE_WITH_NAV)
+
+    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+        result = await server._discover_links("http://example.com/llms.txt", max_depth=2)
+
+    assert "http://example.com/llms.txt" in result
+    assert "http://example.com/page-a" in result
+    assert "http://example.com/page-b" in result
+    assert "http://example.com/nav-1" not in result
+    assert "http://example.com/nav-2" not in result
