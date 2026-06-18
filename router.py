@@ -6,7 +6,7 @@ from pathlib import Path
 
 import chromadb
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -133,9 +133,12 @@ async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = Fa
                 yield f"data: {json.dumps({'type': 'progress', 'message': msg})}\n\n"
             summary = await task
             yield f"data: {json.dumps({'type': 'done', 'summary': summary})}\n\n"
-        except GeneratorExit:
+        except (GeneratorExit, asyncio.CancelledError):
             task.cancel()
             raise
+        except Exception as e:
+            _logger.exception("index_tree stream error")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -164,7 +167,13 @@ async def upload_document_route(file: UploadFile = File(...)) -> str:
     safe_name = Path(file.filename).name
     path = folder / safe_name
     path.write_bytes(await file.read())
-    result = server._index_file(server._current_collection, namespace, path)
+    _logger.info("Uploaded %s (%d bytes)", safe_name, path.stat().st_size)
+    try:
+        result = server._index_file(server._current_collection, namespace, path)
+    except Exception as e:
+        _logger.exception("Failed to index %s", safe_name)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    _logger.info("Indexed %s: %s", safe_name, result)
     if "not supported" in result.lower() or result.startswith("Unsupported") or "No content extracted" in result:
         raise HTTPException(status_code=400, detail=result)
     return result
@@ -203,6 +212,41 @@ def serve_document_route(filename: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"{filename} not found")
     return FileResponse(path)
+
+
+@app.get("/swagger-ui")
+def swagger_ui_route(url: str):
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>Swagger UI</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({{
+      url: {json.dumps(url)},
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: 'StandaloneLayout'
+    }})
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+@app.get("/proxy/spec")
+async def proxy_spec_route(url: str):
+    response = await server._fetch(url)
+    if response is None:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch {url}")
+    content_type = response.headers.get("content-type", "application/json")
+    return Response(content=response.content, media_type=content_type)
 
 
 @app.get("/search")

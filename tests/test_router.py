@@ -309,3 +309,32 @@ async def test_delete_document_not_found(doc_client):
     client, _ = doc_client
     response = await client.delete("/documents/nonexistent.txt")
     assert response.status_code == 404
+
+
+async def test_swagger_ui_returns_html(client):
+    response = await client.get("/swagger-ui", params={"url": "/documents/api.json"})
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "swagger-ui" in response.text.lower()
+    assert "/documents/api.json" in response.text
+
+
+async def test_swagger_ui_missing_url_param(client):
+    response = await client.get("/swagger-ui")
+    assert response.status_code == 422
+
+
+async def test_proxy_spec_returns_content(client):
+    mock_resp = MagicMock()
+    mock_resp.content = b'{"openapi": "3.0.0"}'
+    mock_resp.headers = {"content-type": "application/json"}
+    with patch("server._fetch", new=AsyncMock(return_value=mock_resp)):
+        response = await client.get("/proxy/spec", params={"url": "https://api.example.com/openapi.json"})
+    assert response.status_code == 200
+    assert response.content == b'{"openapi": "3.0.0"}'
+
+
+async def test_proxy_spec_fetch_failure_returns_502(client):
+    with patch("server._fetch", new=AsyncMock(return_value=None)):
+        response = await client.get("/proxy/spec", params={"url": "https://api.example.com/openapi.json"})
+    assert response.status_code == 502
