@@ -74,4 +74,41 @@ describe('PagesList', () => {
     render(<PagesList pages={[]} />)
     expect(screen.getByText('(0)')).toBeInTheDocument()
   })
+
+  it('openapi page links through swagger-ui proxy wrapper', async () => {
+    const pages = [
+      {
+        url: 'https://api.example.com/openapi.json',
+        chunks: 5,
+        is_openapi: true,
+      },
+    ]
+    render(<PagesList pages={pages} />)
+    await userEvent.click(screen.getByText('api.example.com'))
+    const link = screen.getByTitle('https://api.example.com/openapi.json')
+    const expected = `/swagger-ui?url=${encodeURIComponent('/proxy/spec?url=' + encodeURIComponent('https://api.example.com/openapi.json'))}`
+    expect(link).toHaveAttribute('href', expected)
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('openapi page shows api badge', async () => {
+    const pages = [
+      {
+        url: 'https://api.example.com/openapi.json',
+        chunks: 5,
+        is_openapi: true,
+      },
+    ]
+    render(<PagesList pages={pages} />)
+    await userEvent.click(screen.getByText('api.example.com'))
+    expect(screen.getByText('api')).toBeInTheDocument()
+  })
+
+  it('non-openapi page links directly to its url', async () => {
+    const pages = [{ url: 'https://docs.example.com/guide', chunks: 2, is_openapi: false }]
+    render(<PagesList pages={pages} />)
+    await userEvent.click(screen.getByText('docs.example.com'))
+    const link = screen.getByTitle('https://docs.example.com/guide')
+    expect(link).toHaveAttribute('href', 'https://docs.example.com/guide')
+  })
 })

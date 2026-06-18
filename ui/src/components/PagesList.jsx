@@ -14,7 +14,7 @@ function buildTree(pages) {
         node = node.children.get(seg)
       }
       const label = segments[segments.length - 1] || host
-      node.pages.push({ url: page.url, label })
+      node.pages.push({ url: page.url, label, is_openapi: !!page.is_openapi })
     } catch {
       // skip unparseable URLs
     }
@@ -44,18 +44,26 @@ function TreeChildren({ node }) {
       {[...node.children.entries()].map(([seg, child]) => (
         <FolderNode key={seg} seg={seg} node={child} />
       ))}
-      {node.pages.map((page) => (
-        <a
-          key={page.url}
-          href={page.url}
-          target="_blank"
-          rel="noreferrer"
-          title={page.url}
-          className="text-sky-400 text-[11px] no-underline whitespace-nowrap block py-0.5 hover:text-sky-300"
-        >
-          {page.label}
-        </a>
-      ))}
+      {node.pages.map((page) => {
+        const href = page.is_openapi
+          ? `/swagger-ui?url=${encodeURIComponent(`/proxy/spec?url=${encodeURIComponent(page.url)}`)}`
+          : page.url
+        return (
+          <a
+            key={page.url}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            title={page.url}
+            className="text-sky-400 text-[11px] no-underline whitespace-nowrap block py-0.5 hover:text-sky-300"
+          >
+            {page.label}
+            {page.is_openapi && (
+              <span className="ml-1 text-[9px] text-slate-500 uppercase tracking-wide">api</span>
+            )}
+          </a>
+        )
+      })}
     </div>
   )
 }
