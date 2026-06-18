@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { getDocumentUrl } from '../api'
 
-const OPEN_IN_BROWSER = new Set(['.pdf', '.txt', '.md', '.json', '.yaml', '.yml'])
+const SWAGGER_EXTS = new Set(['.json', '.yaml', '.yml'])
+const OPEN_IN_BROWSER = new Set(['.pdf', '.txt', '.md'])
 
 function getExt(name) {
   const idx = name.lastIndexOf('.')
@@ -20,9 +21,19 @@ function fileIcon(name) {
 export default function DocumentsList({ documents, onUpload, onDelete }) {
   const inputRef = useRef(null)
   const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
 
-  const handleFiles = (files) => {
-    for (const file of files) onUpload(file)
+  const handleFiles = async (files) => {
+    setUploadError(null)
+    setUploading(true)
+    for (const file of files) {
+      const result = await onUpload(file)
+      if (result && !result.ok) {
+        setUploadError(result.error)
+      }
+    }
+    setUploading(false)
   }
 
   const handleDrop = (e) => {
@@ -43,13 +54,19 @@ export default function DocumentsList({ documents, onUpload, onDelete }) {
           Documents <span className="text-slate-700 ml-1">({documents.length})</span>
         </div>
         <button
-          onClick={() => inputRef.current?.click()}
-          className="text-[10px] text-slate-500 hover:text-sky-400 px-1 leading-none"
+          onClick={() => { setUploadError(null); inputRef.current?.click() }}
+          disabled={uploading}
+          className="text-[10px] text-slate-500 hover:text-sky-400 px-1 leading-none disabled:opacity-40"
           title="Upload document"
         >
-          +
+          {uploading ? '…' : '+'}
         </button>
       </div>
+      {uploadError && (
+        <div className="text-[10px] text-red-400 mb-1.5 break-words" title={uploadError}>
+          {uploadError}
+        </div>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -61,13 +78,16 @@ export default function DocumentsList({ documents, onUpload, onDelete }) {
       <div className="flex flex-col gap-0.5">
         {documents.map((doc) => {
           const ext = getExt(doc.name)
-          const url = getDocumentUrl(doc.name)
+          const isSwagger = SWAGGER_EXTS.has(ext)
           const openInBrowser = OPEN_IN_BROWSER.has(ext)
+          const href = isSwagger
+            ? `/swagger-ui?url=${encodeURIComponent(`/documents/${doc.name}`)}`
+            : getDocumentUrl(doc.name)
           return (
             <div key={doc.name} className="flex items-center gap-1 group">
-              {openInBrowser ? (
+              {isSwagger || openInBrowser ? (
                 <a
-                  href={url}
+                  href={href}
                   target="_blank"
                   rel="noreferrer"
                   title={doc.name}
@@ -77,7 +97,7 @@ export default function DocumentsList({ documents, onUpload, onDelete }) {
                 </a>
               ) : (
                 <a
-                  href={url}
+                  href={href}
                   download
                   title={doc.name}
                   className="text-sky-400 text-[11px] no-underline truncate flex-1 hover:text-sky-300"

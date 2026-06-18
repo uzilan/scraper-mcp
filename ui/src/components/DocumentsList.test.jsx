@@ -63,4 +63,27 @@ describe('DocumentsList', () => {
     await userEvent.upload(input, file)
     expect(onUpload).toHaveBeenCalledWith(file)
   })
+
+  it('json file links to swagger-ui wrapper, opens in new tab', () => {
+    const docs = [{ name: 'api.json', size: 512, content_type: 'application/json' }]
+    render(<DocumentsList documents={docs} onUpload={vi.fn()} onDelete={vi.fn()} />)
+    const link = screen.getByRole('link', { name: /api\.json/ })
+    expect(link).toHaveAttribute('href', '/swagger-ui?url=%2Fdocuments%2Fapi.json')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).not.toHaveAttribute('download')
+  })
+
+  it('yaml file links to swagger-ui wrapper', () => {
+    const docs = [{ name: 'spec.yaml', size: 256, content_type: 'application/yaml' }]
+    render(<DocumentsList documents={docs} onUpload={vi.fn()} onDelete={vi.fn()} />)
+    const link = screen.getByRole('link', { name: /spec\.yaml/ })
+    expect(link).toHaveAttribute('href', '/swagger-ui?url=%2Fdocuments%2Fspec.yaml')
+  })
+
+  it('yml file links to swagger-ui wrapper', () => {
+    const docs = [{ name: 'openapi.yml', size: 256, content_type: 'application/yaml' }]
+    render(<DocumentsList documents={docs} onUpload={vi.fn()} onDelete={vi.fn()} />)
+    const link = screen.getByRole('link', { name: /openapi\.yml/ })
+    expect(link).toHaveAttribute('href', '/swagger-ui?url=%2Fdocuments%2Fopenapi.yml')
+  })
 })
