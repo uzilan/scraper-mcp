@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect } from 'vitest'
 import DocumentsList from './DocumentsList'
@@ -85,5 +85,14 @@ describe('DocumentsList', () => {
     render(<DocumentsList documents={docs} onUpload={vi.fn()} onDelete={vi.fn()} />)
     const link = screen.getByRole('link', { name: /openapi\.yml/ })
     expect(link).toHaveAttribute('href', '/swagger-ui?url=%2Fdocuments%2Fopenapi.yml')
+  })
+
+  it('shows upload error when onUpload returns { ok: false, error }', async () => {
+    const onUpload = vi.fn().mockResolvedValue({ ok: false, error: 'Upload failed' })
+    render(<DocumentsList documents={[]} onUpload={onUpload} onDelete={vi.fn()} />)
+    const input = document.querySelector('input[type="file"]')
+    const file = new File(['content'], 'bad.txt', { type: 'text/plain' })
+    await userEvent.upload(input, file)
+    await waitFor(() => expect(screen.getByText('Upload failed')).toBeInTheDocument())
   })
 })

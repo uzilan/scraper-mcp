@@ -338,3 +338,8 @@ async def test_proxy_spec_fetch_failure_returns_502(client):
     with patch("server._fetch", new=AsyncMock(return_value=None)):
         response = await client.get("/proxy/spec", params={"url": "https://api.example.com/openapi.json"})
     assert response.status_code == 502
+
+
+async def test_proxy_spec_rejects_non_http_url(client):
+    response = await client.get("/proxy/spec", params={"url": "file:///etc/passwd"})
+    assert response.status_code == 400

@@ -242,6 +242,8 @@ def swagger_ui_route(url: str):
 
 @app.get("/proxy/spec")
 async def proxy_spec_route(url: str):
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
     response = await server._fetch(url)
     if response is None:
         raise HTTPException(status_code=502, detail=f"Failed to fetch {url}")

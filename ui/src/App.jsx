@@ -110,8 +110,8 @@ export default function App() {
             try {
               await api.uploadDocument(file)
               refreshDocuments()
-            } catch {
-              // silent — file may be unsupported
+            } catch (e) {
+              return { ok: false, error: e.message }
             }
           }}
           onDelete={async (name) => {
