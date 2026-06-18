@@ -231,8 +231,7 @@ def swagger_ui_route(url: str):
     SwaggerUIBundle({{
       url: {json.dumps(url)},
       dom_id: '#swagger-ui',
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
-      layout: 'StandaloneLayout'
+      presets: [SwaggerUIBundle.presets.apis]
     }})
   </script>
 </body>
