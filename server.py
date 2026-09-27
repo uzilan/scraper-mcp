@@ -13,6 +13,8 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from mcp.server.fastmcp import Context, FastMCP
 
+from agent import ask_agent
+
 enc = tiktoken.get_encoding("cl100k_base")
 
 CHROMA_PATH = Path(__file__).parent / "data" / "chroma"
@@ -139,6 +141,12 @@ def delete_document(filename: str) -> str:
 def search_docs(query: str, n_results: int = 5) -> dict:
     """Search the active namespace. Returns relevant chunks with source URLs and a deduplicated references list."""
     return _search_docs_tool(query, n_results)
+
+
+@mcp.tool()
+async def ask(query: str, n_results: int = 5) -> dict:
+    """Ask a question and get a synthesized answer with cited sources from the active namespace."""
+    return await _ask_tool(query, n_results)
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +349,30 @@ def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5
         if url not in seen_urls:
             seen_urls.append(url)
     return {"results": output, "references": seen_urls}
+
+
+async def _ask_tool(query: str, n_results: int = 5) -> dict:
+    if _current_collection is None:
+        return {"error": "No namespace selected. Call use_namespace(name) first."}
+    if _current_collection.count() == 0:
+        return {"error": "Namespace is empty. Call index_page(url) first."}
+    return await _ask(_current_collection, query, n_results)
+
+
+async def _ask(collection: chromadb.Collection, query: str, n_results: int = 5) -> dict:
+    retrieved = _search_docs(collection, query, n_results)
+    if not retrieved["results"]:
+        return {"answer": "No relevant content found in this namespace.", "references": []}
+    context = "\n\n".join(
+        f"Source: {r['source_url']}\n{r['text']}" for r in retrieved["results"]
+    )
+    prompt = (
+        "Answer the question using only the context below. "
+        "Cite sources by URL when relevant.\n\n"
+        f"Context:\n{context}\n\nQuestion: {query}"
+    )
+    answer = await ask_agent(prompt, collection.name)
+    return {"answer": answer, "references": retrieved["references"]}
 
 
 # ---------------------------------------------------------------------------
