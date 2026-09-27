@@ -14,6 +14,7 @@ export default defineConfig({
       '/namespaces': 'http://localhost:8000',
       '/index': 'http://localhost:8000',
       '/search': 'http://localhost:8000',
+      '/ask': 'http://localhost:8000',
       '/links': 'http://localhost:8000',
       '/documents': 'http://localhost:8000',
       '/swagger-ui': 'http://localhost:8000',
