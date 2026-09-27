@@ -80,10 +80,25 @@ export default function App() {
       return
     }
 
+    if (tool === 'ask') {
+      entry.status = 'pending'
+      setHistory(prev => [entry, ...prev])
+      try {
+        const result = await api.askAgent(value)
+        setHistory(prev => prev.map(e =>
+          e.id === entry.id ? { ...e, result, status: 'done' } : e
+        ))
+      } catch (err) {
+        setHistory(prev => prev.map(e =>
+          e.id === entry.id ? { ...e, error: err.message, status: 'done' } : e
+        ))
+      }
+      setDone()
+      return
+    }
+
     try {
-      if (tool === 'ask') {
-        entry.result = await api.askAgent(value)
-      } else if (tool === 'index-page') {
+      if (tool === 'index-page') {
         entry.result = await api.indexPage(value)
         refreshPages()
       }

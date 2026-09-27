@@ -39,6 +39,22 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'page' })).toBeInTheDocument()
   })
 
+  it('shows a pending spinner entry before the ask response arrives', async () => {
+    let resolveAsk
+    api.askAgent.mockReturnValue(new Promise(resolve => { resolveAsk = resolve }))
+    render(<App />)
+    await waitFor(() => screen.getByText('test-ns'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'bearer token')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument())
+
+    resolveAsk({ answer: 'Use a Bearer token.', references: [] })
+    await waitFor(() => expect(screen.getByText(/Use a Bearer token/)).toBeInTheDocument())
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('adds an ask result to history on submit', async () => {
     api.askAgent.mockResolvedValue({
       answer: 'Bearer token goes in the Authorization header.',

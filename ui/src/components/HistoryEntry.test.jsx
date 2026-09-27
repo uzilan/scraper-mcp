@@ -41,6 +41,28 @@ const errorEntry = {
   error: 'Failed to fetch page content',
 }
 
+const pendingAskEntry = {
+  id: 7,
+  tool: 'ask',
+  query: 'bearer token',
+  depth: null,
+  result: null,
+  error: null,
+  status: 'pending',
+}
+
+describe('HistoryEntry — ask pending', () => {
+  it('shows a spinner while waiting for the agent', () => {
+    render(<HistoryEntry entry={pendingAskEntry} faded={false} />)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+  })
+
+  it('shows ⋯ as summary while pending', () => {
+    render(<HistoryEntry entry={pendingAskEntry} faded={false} />)
+    expect(screen.getByText('⋯')).toBeInTheDocument()
+  })
+})
+
 describe('HistoryEntry — ask', () => {
   it('renders Ask badge and query', () => {
     render(<HistoryEntry entry={askEntry} faded={false} />)

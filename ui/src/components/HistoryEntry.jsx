@@ -30,6 +30,15 @@ function AskBody({ result }) {
   )
 }
 
+function Spinner() {
+  return (
+    <div role="status" aria-label="Waiting for agent…" className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="w-3.5 h-3.5 border-2 border-slate-700 border-t-sky-500 rounded-full animate-spin" />
+      Waiting for agent…
+    </div>
+  )
+}
+
 function LinkListBody({ links }) {
   return (
     <div className="flex flex-col gap-1">
@@ -103,13 +112,13 @@ export default function HistoryEntry({ entry, faded = false }) {
       {!collapsed && (
         <div className="px-3.5 py-2.5 flex flex-col gap-2">
           {error && <p className="text-xs text-red-400">{error}</p>}
-          {!error && tool === 'ask' && <AskBody result={result} />}
+          {!error && tool === 'ask' && (isPending ? <Spinner /> : <AskBody result={result} />)}
           {!error && tool === 'discover' && !isPending && <LinkListBody links={result} />}
           {!error && tool === 'index-tree' && !isPending && <IndexTreeBody result={result} urls={urls} />}
           {!error && tool === 'index-page' && (
             <p className="text-xs text-slate-400 leading-relaxed">{result}</p>
           )}
-          {!error && isPending && <UrlLog urls={urls} />}
+          {!error && isPending && tool !== 'ask' && <UrlLog urls={urls} />}
         </div>
       )}
     </div>
