@@ -3,34 +3,34 @@ import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect } from 'vitest'
 import InputArea from './InputArea'
 
-describe('InputArea — search tool', () => {
-  it('shows free-text placeholder and Search button', () => {
-    render(<InputArea tool="search" onSubmit={vi.fn()} status="idle" />)
-    expect(screen.getByPlaceholderText('Search the indexed docs…')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
+describe('InputArea — ask tool', () => {
+  it('shows free-text placeholder and Ask button', () => {
+    render(<InputArea tool="ask" onSubmit={vi.fn()} status="idle" />)
+    expect(screen.getByPlaceholderText('Ask a question…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ask' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Depth')).not.toBeInTheDocument()
   })
 
   it('calls onSubmit with value and null depth on button click', async () => {
     const onSubmit = vi.fn()
-    render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
+    render(<InputArea tool="ask" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'bearer token')
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
     expect(onSubmit).toHaveBeenCalledWith({ value: 'bearer token', depth: null })
   })
 
   it('calls onSubmit on Enter key', async () => {
     const onSubmit = vi.fn()
-    render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
+    render(<InputArea tool="ask" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'rate limiting{Enter}')
     expect(onSubmit).toHaveBeenCalledWith({ value: 'rate limiting', depth: null })
   })
 
   it('does not call onSubmit when disabled and Enter is pressed', async () => {
     const onSubmit = vi.fn()
-    const { rerender } = render(<InputArea tool="search" onSubmit={onSubmit} status="idle" />)
+    const { rerender } = render(<InputArea tool="ask" onSubmit={onSubmit} status="idle" />)
     await userEvent.type(screen.getByRole('textbox'), 'some query')
-    rerender(<InputArea tool="search" onSubmit={onSubmit} status="loading" />)
+    rerender(<InputArea tool="ask" onSubmit={onSubmit} status="loading" />)
     await userEvent.keyboard('{Enter}')
     expect(onSubmit).not.toHaveBeenCalled()
   })

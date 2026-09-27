@@ -14,7 +14,7 @@ export default function App() {
   const { namespaces, current, create, switchTo, remove } = useNamespaces()
   const { pages, refresh: refreshPages } = usePages(current)
   const { documents, refresh: refreshDocuments } = useDocuments(current)
-  const [tool, setTool] = useState('search')
+  const [tool, setTool] = useState('ask')
   const [history, setHistory] = useState([])
   const [status, setStatus] = useState('idle')
   const [sidebarWidth, setSidebarWidth] = useState(300)
@@ -81,8 +81,8 @@ export default function App() {
     }
 
     try {
-      if (tool === 'search') {
-        entry.result = await api.searchDocs(value)
+      if (tool === 'ask') {
+        entry.result = await api.askAgent(value)
       } else if (tool === 'index-page') {
         entry.result = await api.indexPage(value)
         refreshPages()

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 const CONFIGS = {
-  'search':     { hint: 'Search across all indexed content',          placeholder: 'Search the indexed docs…',        btn: '→', ariaLabel: 'Search',   hasDepth: false },
+  'ask':        { hint: 'Ask a question about the indexed content',   placeholder: 'Ask a question…',                 btn: '→', ariaLabel: 'Ask',      hasDepth: false },
   'index-page': { hint: 'Index a single documentation page',          placeholder: 'https://docs.example.com/page',   btn: '→', ariaLabel: 'Index',    hasDepth: false },
   'index-tree': { hint: 'Recursively index a full documentation site', placeholder: 'https://docs.example.com/',      btn: '→', ariaLabel: 'Index',    hasDepth: true  },
   'discover':   { hint: 'Discover all reachable links on a domain',   placeholder: 'https://docs.example.com/',       btn: '→', ariaLabel: 'Discover', hasDepth: true  },

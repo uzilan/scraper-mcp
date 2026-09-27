@@ -1,5 +1,5 @@
 const TOOLS = [
-  { id: 'search', label: 'Search', icon: '🔍' },
+  { id: 'ask', label: 'Ask', icon: '💬' },
   { id: 'index-page', label: 'Index Page', icon: '📄' },
   { id: 'index-tree', label: 'Index Tree', icon: '🌲' },
   { id: 'discover', label: 'Discover Links', icon: '🔗' },

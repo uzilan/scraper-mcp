@@ -13,7 +13,7 @@ describe('App', () => {
     api.currentNamespace.mockResolvedValue('test-ns')
     api.listIndexedPages.mockResolvedValue([])
     api.listDocuments.mockResolvedValue([])
-    api.searchDocs.mockResolvedValue({ results: [], references: [] })
+    api.askAgent.mockResolvedValue({ answer: '', references: [] })
     api.indexPage.mockResolvedValue('Indexed.')
     api.indexTree.mockResolvedValue('Indexed tree.')
     api.discoverLinks.mockResolvedValue([])
@@ -39,28 +39,28 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: 'page' })).toBeInTheDocument()
   })
 
-  it('adds a search result to history on submit', async () => {
-    api.searchDocs.mockResolvedValue({
-      results: [{ text: 'Bearer token goes in Authorization header', url: 'https://docs.example.com/auth' }],
-      references: [],
+  it('adds an ask result to history on submit', async () => {
+    api.askAgent.mockResolvedValue({
+      answer: 'Bearer token goes in the Authorization header.',
+      references: ['https://docs.example.com/auth'],
     })
     render(<App />)
     await waitFor(() => screen.getByText('test-ns'))
 
-    await userEvent.type(screen.getByPlaceholderText('Search the indexed docs…'), 'bearer token')
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'bearer token')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
-    await waitFor(() => expect(screen.getByText('Bearer token goes in Authorization header')).toBeInTheDocument())
-    expect(screen.getByText('Search')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/Bearer token goes in the Authorization header/)).toBeInTheDocument())
+    expect(screen.getByText('Ask')).toBeInTheDocument()
   })
 
   it('adds an error entry to history when API call fails', async () => {
-    api.searchDocs.mockRejectedValue(new Error('No namespace selected'))
+    api.askAgent.mockRejectedValue(new Error('No namespace selected'))
     render(<App />)
     await waitFor(() => screen.getByText('test-ns'))
 
-    await userEvent.type(screen.getByPlaceholderText('Search the indexed docs…'), 'anything')
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'anything')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
 
     await waitFor(() => expect(screen.getByText('No namespace selected')).toBeInTheDocument())
   })
@@ -99,18 +99,18 @@ describe('App', () => {
   })
 
   it('history persists across tool switches', async () => {
-    api.searchDocs.mockResolvedValue({
-      results: [{ text: 'Rate limits at 100 req/min', url: 'https://docs.example.com/api' }],
-      references: [],
+    api.askAgent.mockResolvedValue({
+      answer: 'Rate limits at 100 req/min.',
+      references: ['https://docs.example.com/api'],
     })
     render(<App />)
     await waitFor(() => screen.getByText('test-ns'))
 
-    await userEvent.type(screen.getByPlaceholderText('Search the indexed docs…'), 'rate limiting')
-    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
-    await waitFor(() => screen.getByText('Rate limits at 100 req/min'))
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'rate limiting')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => screen.getByText(/Rate limits at 100 req\/min/))
 
     await userEvent.click(screen.getByLabelText('Index Page'))
-    expect(screen.getByText('Rate limits at 100 req/min')).toBeInTheDocument()
+    expect(screen.getByText(/Rate limits at 100 req\/min/)).toBeInTheDocument()
   })
 })

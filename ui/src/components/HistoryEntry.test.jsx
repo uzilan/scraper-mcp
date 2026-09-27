@@ -2,14 +2,14 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import HistoryEntry from './HistoryEntry'
 
-const searchEntry = {
+const askEntry = {
   id: 1,
-  tool: 'search',
+  tool: 'ask',
   query: 'bearer token',
   depth: null,
   result: {
-    results: [{ text: 'Bearer tokens go in Authorization header', source_url: 'https://docs.example.com/auth' }],
-    references: [],
+    answer: 'Bearer tokens go in the Authorization header.',
+    references: ['https://docs.example.com/auth'],
   },
   error: null,
 }
@@ -41,22 +41,22 @@ const errorEntry = {
   error: 'Failed to fetch page content',
 }
 
-describe('HistoryEntry — search', () => {
-  it('renders Search badge and query', () => {
-    render(<HistoryEntry entry={searchEntry} faded={false} />)
-    expect(screen.getByText('Search')).toBeInTheDocument()
+describe('HistoryEntry — ask', () => {
+  it('renders Ask badge and query', () => {
+    render(<HistoryEntry entry={askEntry} faded={false} />)
+    expect(screen.getByText('Ask')).toBeInTheDocument()
     expect(screen.getByText('bearer token')).toBeInTheDocument()
   })
 
-  it('renders result text and source link', () => {
-    render(<HistoryEntry entry={searchEntry} faded={false} />)
-    expect(screen.getByText('Bearer tokens go in Authorization header')).toBeInTheDocument()
+  it('renders the answer text and a reference link', () => {
+    render(<HistoryEntry entry={askEntry} faded={false} />)
+    expect(screen.getByText(/Bearer tokens go in the Authorization header/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'https://docs.example.com/auth' })).toHaveAttribute('target', '_blank')
   })
 
-  it('shows result count in header', () => {
-    render(<HistoryEntry entry={searchEntry} faded={false} />)
-    expect(screen.getByText('1 results')).toBeInTheDocument()
+  it('shows answered in header', () => {
+    render(<HistoryEntry entry={askEntry} faded={false} />)
+    expect(screen.getByText('✓ answered')).toBeInTheDocument()
   })
 })
 
@@ -91,12 +91,12 @@ describe('HistoryEntry — error', () => {
 
 describe('HistoryEntry — faded', () => {
   it('applies reduced opacity class when faded=true', () => {
-    const { container } = render(<HistoryEntry entry={searchEntry} faded={true} />)
+    const { container } = render(<HistoryEntry entry={askEntry} faded={true} />)
     expect(container.firstChild).toHaveClass('opacity-45')
   })
 
   it('does not apply opacity class when faded=false', () => {
-    const { container } = render(<HistoryEntry entry={searchEntry} faded={false} />)
+    const { container } = render(<HistoryEntry entry={askEntry} faded={false} />)
     expect(container.firstChild).not.toHaveClass('opacity-45')
   })
 })
