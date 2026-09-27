@@ -47,6 +47,11 @@ export function searchDocs(query, nResults = 5) {
   return _fetch(`/search?${params}`)
 }
 
+export function askAgent(query) {
+  const params = new URLSearchParams({ query })
+  return _fetch(`/ask?${params}`)
+}
+
 export function discoverLinks(url, maxDepth = 2) {
   const params = new URLSearchParams({ url, max_depth: maxDepth })
   return _fetch(`/links?${params}`)

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   listNamespaces, currentNamespace, createNamespace, useNamespace, deleteNamespace,
-  listIndexedPages, indexPage, indexTree, searchDocs, discoverLinks,
+  listIndexedPages, indexPage, indexTree, searchDocs, askAgent, discoverLinks,
   indexTreeStream, discoverLinksStream, uploadDocument, listDocuments, deleteDocument, getDocumentUrl,
 } from './api'
 
@@ -119,6 +119,16 @@ describe('searchDocs', () => {
     const result = await searchDocs('bearer token')
     expect(result.results[0].text).toBe('found it')
     expect(mockFetch).toHaveBeenCalledWith('/search?query=bearer+token&n_results=5', undefined)
+  })
+})
+
+describe('askAgent', () => {
+  it('GETs /ask?query=... and returns an answer with references', async () => {
+    const payload = { answer: 'Use a Bearer token.', references: ['https://docs.example.com/auth'] }
+    mockOk(payload)
+    const result = await askAgent('how do I authenticate?')
+    expect(result.answer).toBe('Use a Bearer token.')
+    expect(mockFetch).toHaveBeenCalledWith('/ask?query=how+do+I+authenticate%3F', undefined)
   })
 })
 
