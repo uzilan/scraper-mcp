@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from mcp.server.fastmcp import Context, FastMCP
 
+import agent
 from agent import ask_agent
 
 enc = tiktoken.get_encoding("cl100k_base")
@@ -34,6 +35,7 @@ async def lifespan(server: FastMCP):
     CHROMA_PATH.mkdir(parents=True, exist_ok=True)
     _chroma_client = chromadb.PersistentClient(path=str(CHROMA_PATH))
     yield {}
+    await agent.shutdown()
 
 
 mcp = FastMCP("scraper", lifespan=lifespan)

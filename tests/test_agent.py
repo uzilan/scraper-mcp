@@ -5,6 +5,7 @@ import pytest
 from claude_agent_sdk import AssistantMessage, TextBlock
 
 import agent
+import server
 
 
 @pytest.fixture(autouse=True)
@@ -121,6 +122,33 @@ async def test_ask_agent_serializes_concurrent_calls():
         )
 
     assert order == ["query:first", "yielded:first", "query:second", "yielded:second"]
+
+
+async def test_shutdown_disconnects_active_client():
+    fake_client = _make_fake_client("hello world")
+
+    with patch("agent.ClaudeSDKClient", return_value=fake_client):
+        await agent.ask_agent("what is up", "ns-a")
+
+    await agent.shutdown()
+
+    fake_client.disconnect.assert_awaited_once()
+    assert agent._client is None
+    assert agent._client_namespace is None
+
+
+async def test_shutdown_is_a_noop_when_never_connected():
+    # Must not raise even though no client was ever created.
+    await agent.shutdown()
+    assert agent._client is None
+
+
+async def test_mcp_lifespan_shuts_down_agent_on_teardown():
+    with patch("agent.shutdown", new=AsyncMock()) as mock_shutdown, \
+         patch("server.chromadb.PersistentClient", return_value=MagicMock()):
+        async with server.lifespan(server.mcp):
+            mock_shutdown.assert_not_awaited()
+    mock_shutdown.assert_awaited_once()
 
 
 async def test_ask_agent_resets_session_on_namespace_change():

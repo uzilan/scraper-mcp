@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import agent
 import server
 
 _logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def _lifespan(app: FastAPI):
         server.CHROMA_PATH.mkdir(parents=True, exist_ok=True)
         server._chroma_client = chromadb.PersistentClient(path=str(server.CHROMA_PATH))
     yield
+    await agent.shutdown()
 
 
 app = FastAPI(title="Scraper MCP REST API", lifespan=_lifespan)

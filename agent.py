@@ -22,6 +22,15 @@ async def _get_client(namespace: str) -> ClaudeSDKClient:
     return _client
 
 
+async def shutdown() -> None:
+    global _client, _client_namespace
+    async with _lock:
+        if _client is not None:
+            await _client.disconnect()
+            _client = None
+            _client_namespace = None
+
+
 async def ask_agent(prompt: str, namespace: str) -> str:
     global _client
     async with _lock:

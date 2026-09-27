@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import agent
 import httpx
 import pytest
 import server
-from router import app
+from router import _lifespan, app
 
 
 @pytest.fixture
@@ -194,6 +195,13 @@ async def test_ask_agent_failure_returns_400(ns_client):
         response = await ns_client.get("/ask", params={"query": "what is this about"})
     assert response.status_code == 400
     assert "Agent call failed" in response.json()["detail"]
+
+
+async def test_lifespan_shuts_down_agent_on_teardown():
+    with patch("agent.shutdown", new=AsyncMock()) as mock_shutdown:
+        async with _lifespan(app):
+            mock_shutdown.assert_not_awaited()
+    mock_shutdown.assert_awaited_once()
 
 
 async def test_index_tree_stream_no_namespace(client):
