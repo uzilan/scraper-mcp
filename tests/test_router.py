@@ -187,6 +187,15 @@ async def test_ask_success(ns_client):
     assert isinstance(body["references"], list)
 
 
+async def test_ask_agent_failure_returns_400(ns_client):
+    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+        await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
+    with patch("server.ask_agent", new=AsyncMock(side_effect=RuntimeError("CLI crashed"))):
+        response = await ns_client.get("/ask", params={"query": "what is this about"})
+    assert response.status_code == 400
+    assert "Agent call failed" in response.json()["detail"]
+
+
 async def test_index_tree_stream_no_namespace(client):
     response = await client.get("/index/tree/stream", params={"url": "http://example.com"})
     assert response.status_code == 400

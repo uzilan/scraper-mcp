@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -42,6 +43,84 @@ async def test_ask_agent_connects_once_and_returns_text():
         ctor.assert_called_once()
         fake_client.connect.assert_awaited_once()
         fake_client.disconnect.assert_not_awaited()
+
+
+async def test_ask_agent_disables_tools_and_setting_sources():
+    fake_client = _make_fake_client("hello world")
+
+    with patch("agent.ClaudeSDKClient", return_value=fake_client) as ctor:
+        await agent.ask_agent("what is up", "ns-a")
+
+    options = ctor.call_args.kwargs["options"]
+    assert options.tools == []
+    assert options.setting_sources == []
+
+
+async def test_ask_agent_drops_client_on_query_failure():
+    broken_client = _make_fake_client("unused")
+    broken_client.query = AsyncMock(side_effect=RuntimeError("CLI crashed"))
+    recovered_client = _make_fake_client("recovered answer")
+
+    with patch("agent.ClaudeSDKClient", side_effect=[broken_client, recovered_client]) as ctor:
+        with pytest.raises(RuntimeError):
+            await agent.ask_agent("what is up", "ns-a")
+
+        # next call in the same namespace must not reuse the broken client
+        result = await agent.ask_agent("try again", "ns-a")
+        assert result == "recovered answer"
+        assert ctor.call_count == 2
+        broken_client.disconnect.assert_awaited_once()
+
+
+async def test_ask_agent_does_not_cache_client_on_connect_failure():
+    # First call to ns-a succeeds, establishing _client_namespace == "ns-a".
+    first_client = _make_fake_client("unused")
+    first_client.query = AsyncMock(side_effect=RuntimeError("CLI crashed"))
+    # A later call, still in ns-a (so the namespace-mismatch branch does NOT
+    # fire), hits a connect() failure while rebuilding after the crash above.
+    broken_client = MagicMock()
+    broken_client.connect = AsyncMock(side_effect=RuntimeError("CLI not found"))
+    broken_client.disconnect = AsyncMock()
+    recovered_client = _make_fake_client("recovered answer")
+
+    with patch("agent.ClaudeSDKClient", side_effect=[first_client, broken_client, recovered_client]) as ctor:
+        with pytest.raises(RuntimeError, match="CLI crashed"):
+            await agent.ask_agent("what is up", "ns-a")
+
+        with pytest.raises(RuntimeError, match="CLI not found"):
+            await agent.ask_agent("try again", "ns-a")
+
+        result = await agent.ask_agent("third try", "ns-a")
+        assert result == "recovered answer"
+        assert ctor.call_count == 3
+
+
+async def test_ask_agent_serializes_concurrent_calls():
+    order: list[str] = []
+    fake_client = MagicMock()
+    fake_client.connect = AsyncMock()
+    fake_client.disconnect = AsyncMock()
+
+    async def fake_query(prompt):
+        order.append(f"query:{prompt}")
+
+    def make_receive_response(prompt):
+        async def fake_receive_response():
+            await asyncio.sleep(0.01)
+            order.append(f"yielded:{prompt}")
+            yield AssistantMessage(content=[TextBlock(text=prompt)], model="test-model")
+        return fake_receive_response()
+
+    fake_client.query = AsyncMock(side_effect=fake_query)
+    fake_client.receive_response = MagicMock(side_effect=lambda: make_receive_response(order[-1].split(":")[1]))
+
+    with patch("agent.ClaudeSDKClient", return_value=fake_client):
+        await asyncio.gather(
+            agent.ask_agent("first", "ns-a"),
+            agent.ask_agent("second", "ns-a"),
+        )
+
+    assert order == ["query:first", "yielded:first", "query:second", "yielded:second"]
 
 
 async def test_ask_agent_resets_session_on_namespace_change():

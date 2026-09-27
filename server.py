@@ -20,6 +20,7 @@ enc = tiktoken.get_encoding("cl100k_base")
 CHROMA_PATH = Path(__file__).parent / "data" / "chroma"
 UPLOADS_PATH = Path(__file__).parent / "data" / "uploads"
 VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$")
+ASK_TIMEOUT_SECONDS = 60
 
 embed_fn = ef.DefaultEmbeddingFunction()
 
@@ -361,18 +362,28 @@ async def _ask_tool(query: str, n_results: int = 5) -> dict:
 
 async def _ask(collection: chromadb.Collection, query: str, n_results: int = 5) -> dict:
     retrieved = _search_docs(collection, query, n_results)
-    if not retrieved["results"]:
+    relevant = [r for r in retrieved["results"] if r["relevance_score"] > 0]
+    if not relevant:
         return {"answer": "No relevant content found in this namespace.", "references": []}
+    references: list[str] = []
+    for r in relevant:
+        if r["source_url"] not in references:
+            references.append(r["source_url"])
     context = "\n\n".join(
-        f"Source: {r['source_url']}\n{r['text']}" for r in retrieved["results"]
+        f"Source: {r['source_url']}\n{r['text']}" for r in relevant
     )
     prompt = (
         "Answer the question using only the context below. "
         "Cite sources by URL when relevant.\n\n"
         f"Context:\n{context}\n\nQuestion: {query}"
     )
-    answer = await ask_agent(prompt, collection.name)
-    return {"answer": answer, "references": retrieved["references"]}
+    try:
+        answer = await asyncio.wait_for(ask_agent(prompt, collection.name), timeout=ASK_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        return {"error": "Agent call timed out"}
+    except Exception as e:
+        return {"error": f"Agent call failed: {e}"}
+    return {"answer": answer, "references": references}
 
 
 # ---------------------------------------------------------------------------
