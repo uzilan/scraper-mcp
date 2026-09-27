@@ -171,6 +171,22 @@ async def test_search_success(ns_client):
     assert isinstance(body["references"], list)
 
 
+async def test_ask_no_namespace(client):
+    response = await client.get("/ask", params={"query": "hello"})
+    assert response.status_code == 400
+
+
+async def test_ask_success(ns_client):
+    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+        await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
+    with patch("server.ask_agent", new=AsyncMock(return_value="This page documents the API.")):
+        response = await ns_client.get("/ask", params={"query": "what is this about"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "This page documents the API."
+    assert isinstance(body["references"], list)
+
+
 async def test_index_tree_stream_no_namespace(client):
     response = await client.get("/index/tree/stream", params={"url": "http://example.com"})
     assert response.status_code == 400

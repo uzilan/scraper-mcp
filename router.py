@@ -258,6 +258,14 @@ def search_route(query: str, n_results: int = 5) -> dict:
     return result
 
 
+@app.get("/ask")
+async def ask_route(query: str, n_results: int = 5) -> dict:
+    result = await server._ask_tool(query, n_results)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 @app.get("/links")
 async def discover_links_route(url: str, max_depth: int = 2) -> list[str]:
     return await server._discover_links(url, max_depth)
