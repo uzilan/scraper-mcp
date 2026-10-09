@@ -15,6 +15,7 @@ beforeEach(() => {
   baseProps.onCreate.mockReset()
   baseProps.onSwitch.mockReset()
   baseProps.onDelete.mockReset()
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('NamespacePanel', () => {
@@ -67,6 +68,14 @@ describe('NamespacePanel', () => {
     await userEvent.click(deleteButtons[deleteButtons.length - 1])
     expect(baseProps.onDelete).toHaveBeenCalled()
     expect(baseProps.onSwitch).not.toHaveBeenCalled()
+  })
+
+  it('does not call onDelete when confirm is cancelled', async () => {
+    window.confirm.mockReturnValue(false)
+    render(<NamespacePanel {...baseProps} />)
+    const deleteButtons = screen.getAllByText('✕')
+    await userEvent.click(deleteButtons[deleteButtons.length - 1])
+    expect(baseProps.onDelete).not.toHaveBeenCalled()
   })
 
   it('clears input after onCreate succeeds', async () => {

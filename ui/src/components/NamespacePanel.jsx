@@ -24,7 +24,12 @@ export default function NamespacePanel({ namespaces, current, onCreate, onSwitch
             >
               <span className={`flex-1 text-xs ${isActive ? 'text-sky-400 font-semibold' : 'text-slate-400'}`}>{ns}</span>
               <button
-                onClick={e => { e.stopPropagation(); onDelete(ns) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  if (window.confirm(`Delete namespace "${ns}"? This removes all indexed data.`)) {
+                    onDelete(ns)
+                  }
+                }}
                 className={`text-xs ${isActive ? 'text-slate-500 hover:text-red-400' : 'text-slate-700 hover:text-red-400 text-[11px]'}`}
               >✕</button>
             </div>
