@@ -5,16 +5,17 @@ import pytest
 from claude_agent_sdk import AssistantMessage, TextBlock
 
 import agent
-import server
+import claude_agent
+import mcp_tools
 
 
 @pytest.fixture(autouse=True)
 def reset_agent_client():
-    agent._client = None
-    agent._client_namespace = None
+    claude_agent._client = None
+    claude_agent._client_namespace = None
     yield
-    agent._client = None
-    agent._client_namespace = None
+    claude_agent._client = None
+    claude_agent._client_namespace = None
 
 
 def _make_fake_client(reply_text):
@@ -33,7 +34,7 @@ def _make_fake_client(reply_text):
 async def test_ask_agent_connects_once_and_returns_text():
     fake_client = _make_fake_client("hello world")
 
-    with patch("agent.ClaudeSDKClient", return_value=fake_client) as ctor:
+    with patch("claude_agent.ClaudeSDKClient", return_value=fake_client) as ctor:
         result = await agent.ask_agent("what is up", "ns-a")
         assert result == "hello world"
         fake_client.connect.assert_awaited_once()
@@ -49,7 +50,7 @@ async def test_ask_agent_connects_once_and_returns_text():
 async def test_ask_agent_disables_tools_and_setting_sources():
     fake_client = _make_fake_client("hello world")
 
-    with patch("agent.ClaudeSDKClient", return_value=fake_client) as ctor:
+    with patch("claude_agent.ClaudeSDKClient", return_value=fake_client) as ctor:
         await agent.ask_agent("what is up", "ns-a")
 
     options = ctor.call_args.kwargs["options"]
@@ -62,7 +63,7 @@ async def test_ask_agent_drops_client_on_query_failure():
     broken_client.query = AsyncMock(side_effect=RuntimeError("CLI crashed"))
     recovered_client = _make_fake_client("recovered answer")
 
-    with patch("agent.ClaudeSDKClient", side_effect=[broken_client, recovered_client]) as ctor:
+    with patch("claude_agent.ClaudeSDKClient", side_effect=[broken_client, recovered_client]) as ctor:
         with pytest.raises(RuntimeError):
             await agent.ask_agent("what is up", "ns-a")
 
@@ -84,7 +85,7 @@ async def test_ask_agent_does_not_cache_client_on_connect_failure():
     broken_client.disconnect = AsyncMock()
     recovered_client = _make_fake_client("recovered answer")
 
-    with patch("agent.ClaudeSDKClient", side_effect=[first_client, broken_client, recovered_client]) as ctor:
+    with patch("claude_agent.ClaudeSDKClient", side_effect=[first_client, broken_client, recovered_client]) as ctor:
         with pytest.raises(RuntimeError, match="CLI crashed"):
             await agent.ask_agent("what is up", "ns-a")
 
@@ -115,7 +116,7 @@ async def test_ask_agent_serializes_concurrent_calls():
     fake_client.query = AsyncMock(side_effect=fake_query)
     fake_client.receive_response = MagicMock(side_effect=lambda: make_receive_response(order[-1].split(":")[1]))
 
-    with patch("agent.ClaudeSDKClient", return_value=fake_client):
+    with patch("claude_agent.ClaudeSDKClient", return_value=fake_client):
         await asyncio.gather(
             agent.ask_agent("first", "ns-a"),
             agent.ask_agent("second", "ns-a"),
@@ -127,26 +128,26 @@ async def test_ask_agent_serializes_concurrent_calls():
 async def test_shutdown_disconnects_active_client():
     fake_client = _make_fake_client("hello world")
 
-    with patch("agent.ClaudeSDKClient", return_value=fake_client):
+    with patch("claude_agent.ClaudeSDKClient", return_value=fake_client):
         await agent.ask_agent("what is up", "ns-a")
 
     await agent.shutdown()
 
     fake_client.disconnect.assert_awaited_once()
-    assert agent._client is None
-    assert agent._client_namespace is None
+    assert claude_agent._client is None
+    assert claude_agent._client_namespace is None
 
 
 async def test_shutdown_is_a_noop_when_never_connected():
     # Must not raise even though no client was ever created.
     await agent.shutdown()
-    assert agent._client is None
+    assert claude_agent._client is None
 
 
 async def test_mcp_lifespan_shuts_down_agent_on_teardown():
     with patch("agent.shutdown", new=AsyncMock()) as mock_shutdown, \
-         patch("server.chromadb.PersistentClient", return_value=MagicMock()):
-        async with server.lifespan(server.mcp):
+         patch("namespaces.chromadb.PersistentClient", return_value=MagicMock()):
+        async with mcp_tools.lifespan(mcp_tools.mcp):
             mock_shutdown.assert_not_awaited()
     mock_shutdown.assert_awaited_once()
 
@@ -155,7 +156,7 @@ async def test_ask_agent_resets_session_on_namespace_change():
     first_client = _make_fake_client("answer for ns-a")
     second_client = _make_fake_client("answer for ns-b")
 
-    with patch("agent.ClaudeSDKClient", side_effect=[first_client, second_client]) as ctor:
+    with patch("claude_agent.ClaudeSDKClient", side_effect=[first_client, second_client]) as ctor:
         result_a = await agent.ask_agent("question 1", "ns-a")
         assert result_a == "answer for ns-a"
 

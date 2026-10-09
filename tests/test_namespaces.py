@@ -1,74 +1,74 @@
-import server
-from server import chunk, parse
+import namespaces
+from parsing import chunk, parse
 
 
 def test_create_namespace_valid():
-    result = server._create_namespace(server._chroma_client, "my-ns")
+    result = namespaces.create_namespace("my-ns")
     assert result == "Namespace 'my-ns' created and is now active."
 
 
 def test_create_namespace_idempotent():
-    server._create_namespace(server._chroma_client, "my-ns")
-    result = server._create_namespace(server._chroma_client, "my-ns")
+    namespaces.create_namespace("my-ns")
+    result = namespaces.create_namespace("my-ns")
     assert result == "Namespace 'my-ns' created and is now active."
 
 
 def test_create_namespace_invalid_name():
-    result = server._create_namespace(server._chroma_client, "a")
+    result = namespaces.create_namespace("a")
     assert "Invalid name" in result
 
 
 def test_list_namespaces_empty():
-    assert server._list_namespaces(server._chroma_client) == []
+    assert namespaces.list_namespaces() == []
 
 
 def test_list_namespaces():
-    server._create_namespace(server._chroma_client, "ns-one")
-    server._create_namespace(server._chroma_client, "ns-two")
-    names = server._list_namespaces(server._chroma_client)
+    namespaces.create_namespace("ns-one")
+    namespaces.create_namespace("ns-two")
+    names = namespaces.list_namespaces()
     assert set(names) == {"ns-one", "ns-two"}
 
 
 def test_use_namespace():
-    server._create_namespace(server._chroma_client, "my-ns")
-    result = server._use_namespace(server._chroma_client, "my-ns")
+    namespaces.create_namespace("my-ns")
+    result = namespaces.use_namespace("my-ns")
     assert result == "Using namespace 'my-ns'."
-    assert server._current_collection is not None
-    assert server._current_collection.name == "my-ns"
+    assert namespaces.current_collection is not None
+    assert namespaces.current_collection.name == "my-ns"
 
 
 def test_use_namespace_nonexistent():
-    result = server._use_namespace(server._chroma_client, "ghost")
+    result = namespaces.use_namespace("ghost")
     assert "does not exist" in result
-    assert server._current_collection is None
+    assert namespaces.current_collection is None
 
 
 def test_current_namespace_none():
-    assert server._current_namespace() == "No namespace selected."
+    assert namespaces.current_namespace() == "No namespace selected."
 
 
 def test_current_namespace_set():
-    server._create_namespace(server._chroma_client, "my-ns")
-    server._use_namespace(server._chroma_client, "my-ns")
-    assert server._current_namespace() == "my-ns"
+    namespaces.create_namespace("my-ns")
+    namespaces.use_namespace("my-ns")
+    assert namespaces.current_namespace() == "my-ns"
 
 
 def test_delete_namespace():
-    server._create_namespace(server._chroma_client, "my-ns")
-    result = server._delete_namespace(server._chroma_client, "my-ns")
+    namespaces.create_namespace("my-ns")
+    result = namespaces.delete_namespace("my-ns")
     assert result == "Namespace 'my-ns' deleted."
-    assert "my-ns" not in server._list_namespaces(server._chroma_client)
+    assert "my-ns" not in namespaces.list_namespaces()
 
 
 def test_delete_namespace_clears_current():
-    server._create_namespace(server._chroma_client, "my-ns")
-    server._use_namespace(server._chroma_client, "my-ns")
-    server._delete_namespace(server._chroma_client, "my-ns")
-    assert server._current_collection is None
+    namespaces.create_namespace("my-ns")
+    namespaces.use_namespace("my-ns")
+    namespaces.delete_namespace("my-ns")
+    assert namespaces.current_collection is None
 
 
 def test_delete_namespace_nonexistent():
-    result = server._delete_namespace(server._chroma_client, "ghost")
+    result = namespaces.delete_namespace("ghost")
     assert "does not exist" in result
 
 

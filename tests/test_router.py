@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import agent
 import httpx
 import pytest
-import server
+import namespaces
 from router import _lifespan, app
 
 
@@ -104,14 +104,14 @@ async def test_index_page_no_namespace(client):
 
 
 async def test_index_page_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         response = await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
     assert response.status_code == 200
     assert "Indexed" in response.json()
 
 
 async def test_index_page_fetch_failure(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=None)):
+    with patch("crawling.fetch", new=AsyncMock(return_value=None)):
         response = await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
     assert response.status_code == 400
 
@@ -122,7 +122,7 @@ async def test_index_tree_no_namespace(client):
 
 
 async def test_index_tree_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         response = await ns_client.post("/index/tree", json={"url": "http://example.com"})
     assert response.status_code == 200
     assert "Indexed" in response.json()
@@ -135,7 +135,7 @@ async def test_list_indexed_pages_empty(ns_client):
 
 
 async def test_list_indexed_pages_after_indexing(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
     response = await ns_client.get("/index/pages")
     assert response.status_code == 200
@@ -148,7 +148,7 @@ async def test_clear_index_no_namespace(client):
 
 
 async def test_clear_index_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
     response = await ns_client.delete("/index")
     assert response.status_code == 200
@@ -161,7 +161,7 @@ async def test_search_no_namespace(client):
 
 
 async def test_search_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
     response = await ns_client.get("/search", params={"query": "documentation", "n_results": 3})
     assert response.status_code == 200
@@ -178,9 +178,9 @@ async def test_ask_no_namespace(client):
 
 
 async def test_ask_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
-    with patch("server.ask_agent", new=AsyncMock(return_value="This page documents the API.")):
+    with patch("search.ask_agent", new=AsyncMock(return_value="This page documents the API.")):
         response = await ns_client.get("/ask", params={"query": "what is this about"})
     assert response.status_code == 200
     body = response.json()
@@ -189,9 +189,9 @@ async def test_ask_success(ns_client):
 
 
 async def test_ask_agent_failure_returns_400(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         await ns_client.post("/index/page", json={"url": "http://example.com/docs"})
-    with patch("server.ask_agent", new=AsyncMock(side_effect=RuntimeError("CLI crashed"))):
+    with patch("search.ask_agent", new=AsyncMock(side_effect=RuntimeError("CLI crashed"))):
         response = await ns_client.get("/ask", params={"query": "what is this about"})
     assert response.status_code == 400
     assert "Agent call failed" in response.json()["detail"]
@@ -204,13 +204,34 @@ async def test_lifespan_shuts_down_agent_on_teardown():
     mock_shutdown.assert_awaited_once()
 
 
+async def test_ask_uses_configured_codex_provider(ns_client, monkeypatch):
+    monkeypatch.setenv("AGENT_PROVIDER", "codex")
+    content = "Bearer tokens authenticate API requests via the Authorization header."
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(f"<html><body><p>{content}</p></body></html>"))):
+        response = await ns_client.post("/index/page", json={"url": "http://example.com/auth"})
+    assert response.status_code == 200
+    with patch("codex_agent.ask_agent", new=AsyncMock(return_value="Use a Bearer token.")) as ask_codex, \
+         patch("claude_agent.ask_agent", new=AsyncMock()) as ask_claude:
+        response = await ns_client.get("/ask", params={"query": "How do I authenticate?"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "answer": "Use a Bearer token.", "references": ["http://example.com/auth"]
+    }
+    ask_codex.assert_awaited_once()
+    prompt, namespace = ask_codex.call_args.args
+    assert content in prompt
+    assert "How do I authenticate?" in prompt
+    assert namespace == "test-ns"
+    ask_claude.assert_not_awaited()
+
+
 async def test_index_tree_stream_no_namespace(client):
     response = await client.get("/index/tree/stream", params={"url": "http://example.com"})
     assert response.status_code == 400
 
 
 async def test_index_tree_stream_success(ns_client):
-    with patch("server._fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
+    with patch("crawling.fetch", new=AsyncMock(return_value=_html_response(SIMPLE_HTML))):
         async with ns_client.stream(
             "GET", "/index/tree/stream", params={"url": "http://example.com/"}
         ) as resp:
@@ -239,7 +260,7 @@ async def test_discover_links(client):
             return _html_response(linked_html)
         return leaf
 
-    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+    with patch("crawling.fetch", new=AsyncMock(side_effect=mock_fetch)):
         response = await client.get("/links", params={"url": "http://example.com/", "max_depth": 1})
 
     assert response.status_code == 200
@@ -257,7 +278,7 @@ async def test_discover_links_stream_success(client):
             return _html_response(linked_html)
         return _html_response("<html><body>leaf</body></html>")
 
-    with patch("server._fetch", new=AsyncMock(side_effect=mock_fetch)):
+    with patch("crawling.fetch", new=AsyncMock(side_effect=mock_fetch)):
         async with client.stream(
             "GET", "/links/stream", params={"url": "http://example.com/", "max_depth": 1}
         ) as resp:
@@ -273,7 +294,7 @@ async def test_discover_links_stream_success(client):
 
 @pytest.fixture
 async def doc_client(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(server, 'UPLOADS_PATH', tmp_path)
+    monkeypatch.setattr(namespaces, 'UPLOADS_PATH', tmp_path)
     await client.post("/namespaces", json={"name": "doc-ns"})
     return client, tmp_path
 
@@ -361,14 +382,14 @@ async def test_proxy_spec_returns_content(client):
     mock_resp = MagicMock()
     mock_resp.content = b'{"openapi": "3.0.0"}'
     mock_resp.headers = {"content-type": "application/json"}
-    with patch("server._fetch", new=AsyncMock(return_value=mock_resp)):
+    with patch("crawling.fetch", new=AsyncMock(return_value=mock_resp)):
         response = await client.get("/proxy/spec", params={"url": "https://api.example.com/openapi.json"})
     assert response.status_code == 200
     assert response.content == b'{"openapi": "3.0.0"}'
 
 
 async def test_proxy_spec_fetch_failure_returns_502(client):
-    with patch("server._fetch", new=AsyncMock(return_value=None)):
+    with patch("crawling.fetch", new=AsyncMock(return_value=None)):
         response = await client.get("/proxy/spec", params={"url": "https://api.example.com/openapi.json"})
     assert response.status_code == 502
 

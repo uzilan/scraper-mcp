@@ -4,7 +4,6 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import chromadb
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,16 +11,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import agent
-import server
+import application
+import crawling
+import documents
+import indexing
+import namespaces
 
 _logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    if server._chroma_client is None:
-        server.CHROMA_PATH.mkdir(parents=True, exist_ok=True)
-        server._chroma_client = chromadb.PersistentClient(path=str(server.CHROMA_PATH))
+    namespaces.initialize_client()
     yield
     await agent.shutdown()
 
@@ -55,33 +56,33 @@ class NamespaceBody(BaseModel):
 
 @app.post("/namespaces")
 def create_namespace_route(body: NamespaceBody) -> str:
-    result = server._create_namespace(server._chroma_client, body.name)
+    result = application.create_namespace(body.name)
     _raise_if_error(result)
     return result
 
 
 @app.get("/namespaces")
 def list_namespaces_route() -> list[str]:
-    return server._list_namespaces(server._chroma_client)
+    return application.list_namespaces()
 
 
 @app.delete("/namespaces/{name}")
 def delete_namespace_route(name: str) -> str:
-    result = server._delete_namespace(server._chroma_client, name)
+    result = application.delete_namespace(name)
     _raise_if_error(result)
     return result
 
 
 @app.post("/namespaces/{name}/use")
 def use_namespace_route(name: str) -> str:
-    result = server._use_namespace(server._chroma_client, name)
+    result = application.use_namespace(name)
     _raise_if_error(result)
     return result
 
 
 @app.get("/namespaces/current")
 def current_namespace_route() -> str:
-    ns = server._current_namespace()
+    ns = application.current_namespace()
     return "" if ns.startswith("No namespace") else ns
 
 
@@ -97,7 +98,7 @@ class IndexTreeBody(BaseModel):
 
 @app.post("/index/page")
 async def index_page_route(body: IndexPageBody) -> str:
-    result = await server._index_page_tool(body.url)
+    result = await application.index_page(body.url)
     _raise_if_error(result)
     return result
 
@@ -105,14 +106,14 @@ async def index_page_route(body: IndexPageBody) -> str:
 @app.post("/index/tree")
 async def index_tree_route(body: IndexTreeBody) -> str:
     # log=None: REST clients cannot receive streaming progress updates
-    result = await server._index_tree_tool(body.url, body.max_depth, body.force)
+    result = await application.index_tree(body.url, body.max_depth, body.force)
     _raise_if_error(result)
     return result
 
 
 @app.get("/index/tree/stream")
 async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = False):
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
     queue: asyncio.Queue = asyncio.Queue()
 
@@ -121,7 +122,7 @@ async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = Fa
 
     async def generate():
         task = asyncio.create_task(
-            server._index_tree(server._current_collection, url, max_depth, force, log)
+            indexing.index_tree(namespaces.current_collection, url, max_depth, force, log)
         )
         try:
             while not task.done():
@@ -147,31 +148,31 @@ async def index_tree_stream_route(url: str, max_depth: int = 2, force: bool = Fa
 
 @app.get("/index/pages")
 def list_indexed_pages_route() -> list[dict]:
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         return []
-    return server._list_indexed_pages(server._current_collection)
+    return application.list_indexed_pages()
 
 
 @app.delete("/index")
 def clear_index_route() -> str:
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
-    return server._clear_index(server._current_collection)
+    return application.clear_index()
 
 
 @app.post("/documents")
 async def upload_document_route(file: UploadFile = File(...)) -> str:
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
-    namespace = server._current_collection.name
-    folder = server.UPLOADS_PATH / namespace
+    namespace = namespaces.current_collection.name
+    folder = namespaces.UPLOADS_PATH / namespace
     folder.mkdir(parents=True, exist_ok=True)
     safe_name = Path(file.filename).name
     path = folder / safe_name
     path.write_bytes(await file.read())
     _logger.info("Uploaded %s (%d bytes)", safe_name, path.stat().st_size)
     try:
-        result = server._index_file(server._current_collection, namespace, path)
+        result = documents.index_file(namespaces.current_collection, namespace, path)
     except Exception as e:
         _logger.exception("Failed to index %s", safe_name)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -183,22 +184,22 @@ async def upload_document_route(file: UploadFile = File(...)) -> str:
 
 @app.get("/documents")
 def list_documents_route() -> list[dict]:
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         return []
-    return server._list_documents(server._current_collection.name)
+    return application.list_documents()
 
 
 @app.delete("/documents/{filename}")
 def delete_document_route(filename: str) -> str:
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
     safe_filename = Path(filename).name
     if not safe_filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
-    path = server.UPLOADS_PATH / server._current_collection.name / safe_filename
-    if not path.resolve().is_relative_to((server.UPLOADS_PATH / server._current_collection.name).resolve()):
+    path = namespaces.UPLOADS_PATH / namespaces.current_collection.name / safe_filename
+    if not path.resolve().is_relative_to((namespaces.UPLOADS_PATH / namespaces.current_collection.name).resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")
-    result = server._delete_document(server._current_collection, server._current_collection.name, safe_filename)
+    result = documents.delete_document(namespaces.current_collection, namespaces.current_collection.name, safe_filename)
     if "not found" in result.lower():
         raise HTTPException(status_code=404, detail=result)
     return result
@@ -206,10 +207,10 @@ def delete_document_route(filename: str) -> str:
 
 @app.get("/documents/{filename}")
 def serve_document_route(filename: str):
-    if server._current_collection is None:
+    if namespaces.current_collection is None:
         raise HTTPException(status_code=400, detail="No namespace selected. Call use_namespace first.")
-    path = server.UPLOADS_PATH / server._current_collection.name / filename
-    if not path.resolve().is_relative_to((server.UPLOADS_PATH / server._current_collection.name).resolve()):
+    path = namespaces.UPLOADS_PATH / namespaces.current_collection.name / filename
+    if not path.resolve().is_relative_to((namespaces.UPLOADS_PATH / namespaces.current_collection.name).resolve()):
         raise HTTPException(status_code=400, detail="Invalid filename")
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"{filename} not found")
@@ -245,7 +246,7 @@ def swagger_ui_route(url: str):
 async def proxy_spec_route(url: str):
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
-    response = await server._fetch(url)
+    response = await crawling.fetch(url)
     if response is None:
         raise HTTPException(status_code=502, detail=f"Failed to fetch {url}")
     content_type = response.headers.get("content-type", "application/json")
@@ -254,7 +255,7 @@ async def proxy_spec_route(url: str):
 
 @app.get("/search")
 def search_route(query: str, n_results: int = 5) -> dict:
-    result = server._search_docs_tool(query, n_results)
+    result = application.search_docs(query, n_results)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -262,7 +263,7 @@ def search_route(query: str, n_results: int = 5) -> dict:
 
 @app.get("/ask")
 async def ask_route(query: str, n_results: int = 5) -> dict:
-    result = await server._ask_tool(query, n_results)
+    result = await application.ask(query, n_results)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
@@ -270,7 +271,7 @@ async def ask_route(query: str, n_results: int = 5) -> dict:
 
 @app.get("/links")
 async def discover_links_route(url: str, max_depth: int = 2) -> list[str]:
-    return await server._discover_links(url, max_depth)
+    return await application.discover_links(url, max_depth)
 
 
 @app.get("/links/stream")
@@ -283,7 +284,7 @@ async def discover_links_stream_route(url: str, max_depth: int = 2):
         await queue.put(u)
 
     async def generate():
-        task = asyncio.create_task(server._discover_links(url, max_depth, log))
+        task = asyncio.create_task(application.discover_links(url, max_depth, log))
         try:
             while not task.done():
                 try:

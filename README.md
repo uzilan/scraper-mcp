@@ -11,7 +11,7 @@ You can:
 - Keep separate libraries for different projects using **namespaces**.
 - Search in natural language instead of needing exact keywords.
 
-Search returns passages from the content you have added, not generated answers or live web search results. You do not need an AI account or API key to use the browser interface.
+Search returns passages from the content you have added, not generated answers or live web search results. Search does not require an AI account or API key. The optional **Ask** tool generates an answer using a configured agent and requires that agent's authentication.
 
 ## Quick start: use it in your browser
 
@@ -67,6 +67,47 @@ Start with a file so you can try the complete workflow without choosing a websit
 Search covers only the selected namespace. To work with another library, click its name in the Namespace panel.
 
 Namespace names must be 3–63 characters long, use only letters, numbers, hyphens, or underscores, and start and end with a letter or number. For example: `my-docs`, `payments-api`, or `team_notes`.
+
+## Configure the Ask agent
+
+Set `AGENT_PROVIDER` when starting the backend. The same setting applies to browser and MCP Ask requests; the UI does not need configuration.
+
+Ask includes the selected namespace name in its search query: `how does it work?` in `litellm` searches for `litellm: how does it work?`. The agent receives your original question and the retrieved passages. Regular Search uses your query unchanged; Ask does not include previous questions in retrieval.
+
+Each Ask history entry shows a namespace tag captured when the question is submitted. The tag stays visible when the entry is collapsed and does not change when you switch namespaces.
+
+| Value | Behavior |
+| --- | --- |
+| `claude` (default) | Uses the existing Claude Agent SDK integration and its authentication. |
+| `codex` | Runs the locally installed `codex exec` CLI using its existing login. |
+
+For Codex, ensure `codex` is on the backend process's `PATH` and authenticate it under the same operating-system user that runs the server:
+
+```bash
+codex login
+codex login status
+AGENT_PROVIDER=codex uv run python server.py
+```
+
+Alternatively, create a `.env` file in the project root to keep local settings between runs:
+
+```dotenv
+AGENT_PROVIDER=codex
+```
+
+Load it explicitly when starting the server:
+
+```bash
+uv run --env-file .env python server.py
+```
+
+Creating `.env` alone does not load it; use `--env-file` on each run. The file is already ignored by Git. Keep local settings and secrets untracked; a shared `.env.example`, if added, should contain only safe example values, never credentials.
+
+Select a namespace, add content, then select **Ask** and enter your question. The backend retrieves relevant passages and sends them to the selected agent, returning an answer and source references. Calls retain the existing 60-second timeout and do not stream the answer to the browser.
+
+Codex starts a fresh, ephemeral request in a temporary read-only workspace for each question. It receives the prompt over stdin and uses your existing Codex model, provider, and authentication configuration, including custom provider endpoints. The backend disables configured MCP servers, shell execution features, plugins, apps, and hooks, and ignores execution rules to avoid loading unrelated integrations. The existing `CODEX_HOME` is respected; this application reads MCP server names from its `config.toml` to disable them for the request, but does not read, copy, or manage login credentials. Environment variables required by your configured provider must be available to the backend process. Use a CLI version that supports these flags (checked locally with `codex-cli 0.162.0`).
+
+To switch back, set `AGENT_PROVIDER=claude` in your startup command or `.env`, or remove the setting, then restart the server. An unsupported provider, missing CLI, or failed agent call produces an error rather than falling back to another provider. The Ask request sends retrieved content to the selected agent's model provider and is subject to that account's usage limits and billing.
 
 ## Add your own content
 
@@ -207,3 +248,5 @@ The key tools are `create_namespace`, `use_namespace`, `index_page`, `index_tree
 | The first upload or indexing operation is slow | Allow time for the search model to download; check your internet connection if the download fails. |
 | A page cannot be indexed or has no useful text | Try a directly accessible page or upload a document instead. Pages requiring login or JavaScript rendering may not work; the scraper does not run an interactive browser. |
 | Search does not find what you expected | Check the selected namespace and whether the content finished indexing. Try a more specific query or add the relevant page or file. |
+| Ask cannot start Codex | Check `codex --version`, ensure the CLI is on the server's `PATH`, and run `codex login status` as the server's user. For custom providers, check the endpoint in your Codex config and ensure the provider's authentication environment variable is available to the backend. |
+| Ask times out | Try a narrower question or check the agent's connectivity; unfinished Codex processes are terminated on timeout. |

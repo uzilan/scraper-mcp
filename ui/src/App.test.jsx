@@ -70,6 +70,102 @@ describe('App', () => {
     expect(screen.getByText('Ask')).toBeInTheDocument()
   })
 
+  it('collapses the previous Ask entry only after a new answer arrives and lets it reopen', async () => {
+    let resolveAsk
+    api.askAgent
+      .mockResolvedValueOnce({ answer: 'First answer.', references: [] })
+      .mockReturnValueOnce(new Promise(resolve => { resolveAsk = resolve }))
+    render(<App />)
+    await waitFor(() => screen.getByText('test-ns'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'first question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => expect(screen.getByText('First answer.')).toBeInTheDocument())
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'second question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByText('First answer.')).toBeInTheDocument()
+
+    resolveAsk({ answer: 'Second answer.', references: [] })
+    await waitFor(() => expect(screen.getByText('Second answer.')).toBeInTheDocument())
+    expect(screen.queryByText('First answer.')).not.toBeInTheDocument()
+    expect(screen.getByText('first question')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('first question'))
+    expect(screen.getByText('First answer.')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('first question'))
+    expect(screen.queryByText('First answer.')).not.toBeInTheDocument()
+  })
+
+  it('keeps the previous Ask answer expanded when a new request fails', async () => {
+    api.askAgent
+      .mockResolvedValueOnce({ answer: 'First answer.', references: [] })
+      .mockRejectedValueOnce(new Error('Agent unavailable'))
+    render(<App />)
+    await waitFor(() => screen.getByText('test-ns'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'first question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => screen.getByText('First answer.'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'second question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => expect(screen.getByText('Agent unavailable')).toBeInTheDocument())
+    expect(screen.getByText('First answer.')).toBeInTheDocument()
+  })
+
+  it('keeps an Ask answer expanded when another tool returns a result', async () => {
+    api.askAgent.mockResolvedValue({ answer: 'First answer.', references: [] })
+    render(<App />)
+    await waitFor(() => screen.getByText('test-ns'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'first question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => screen.getByText('First answer.'))
+
+    await userEvent.click(screen.getByLabelText('Index Page'))
+    await userEvent.type(screen.getByPlaceholderText('https://docs.example.com/page'), 'https://example.com/')
+    await userEvent.click(screen.getByRole('button', { name: 'Index' }))
+    await waitFor(() => expect(screen.getByText('Indexed.')).toBeInTheDocument())
+    expect(screen.getByText('First answer.')).toBeInTheDocument()
+  })
+
+  it('keeps each Ask entry tagged with its namespace at submission across namespace switches', async () => {
+    let resolveAsk
+    api.listNamespaces.mockResolvedValue(['test-ns', 'other-ns'])
+    api.useNamespace.mockResolvedValue('Switched namespace.')
+    api.askAgent
+      .mockReturnValueOnce(new Promise(resolve => { resolveAsk = resolve }))
+      .mockResolvedValueOnce({ answer: 'Second answer.', references: [] })
+    render(<App />)
+    await waitFor(() => screen.getByText('test-ns'))
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'first question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByLabelText('Namespace: test-ns')).toHaveTextContent('test-ns')
+
+    api.currentNamespace.mockResolvedValue('other-ns')
+    await userEvent.click(screen.getByText('other-ns'))
+    await waitFor(() => expect(screen.getByText('other-ns')).toHaveClass('font-semibold'))
+    expect(screen.getByLabelText('Namespace: test-ns')).toHaveTextContent('test-ns')
+
+    resolveAsk({ answer: 'First answer.', references: [] })
+    await waitFor(() => expect(screen.getByText('First answer.')).toBeInTheDocument())
+    expect(screen.getByLabelText('Namespace: test-ns')).toHaveTextContent('test-ns')
+
+    await userEvent.type(screen.getByPlaceholderText('Ask a question…'), 'second question')
+    await userEvent.click(screen.getByRole('button', { name: 'Ask' }))
+    await waitFor(() => expect(screen.getByText('Second answer.')).toBeInTheDocument())
+    expect(screen.getByLabelText('Namespace: other-ns')).toHaveTextContent('other-ns')
+    expect(screen.getByLabelText('Namespace: test-ns')).toHaveTextContent('test-ns')
+    expect(screen.queryByText('First answer.')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByText('first question'))
+    expect(screen.getByText('First answer.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Namespace: test-ns')).toHaveTextContent('test-ns')
+  })
+
   it('adds an error entry to history when API call fails', async () => {
     api.askAgent.mockRejectedValue(new Error('No namespace selected'))
     render(<App />)

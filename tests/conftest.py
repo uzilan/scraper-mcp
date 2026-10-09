@@ -1,6 +1,11 @@
 import chromadb
 import pytest
-import server
+import namespaces
+
+
+@pytest.fixture(autouse=True)
+def default_agent_provider(monkeypatch):
+    monkeypatch.delenv("AGENT_PROVIDER", raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -8,14 +13,14 @@ def reset_state():
     client = chromadb.EphemeralClient()
     for col in client.list_collections():
         client.delete_collection(col.name)
-    server._chroma_client = client
-    server._current_collection = None
+    namespaces.chroma_client = client
+    namespaces.current_collection = None
     yield
-    server._chroma_client = None
-    server._current_collection = None
+    namespaces.chroma_client = None
+    namespaces.current_collection = None
 
 
 @pytest.fixture
 def tmp_uploads(tmp_path, monkeypatch):
-    monkeypatch.setattr(server, "UPLOADS_PATH", tmp_path)
+    monkeypatch.setattr(namespaces, "UPLOADS_PATH", tmp_path)
     return tmp_path

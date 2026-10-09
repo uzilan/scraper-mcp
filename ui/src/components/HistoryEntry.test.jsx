@@ -64,6 +64,21 @@ describe('HistoryEntry — ask pending', () => {
 })
 
 describe('HistoryEntry — ask', () => {
+  it.each([
+    ['answered', askEntry, false],
+    ['pending', pendingAskEntry, false],
+    ['collapsed', askEntry, true],
+    ['failed', { ...pendingAskEntry, status: 'done', error: 'Agent unavailable' }, false],
+  ])('shows the namespace tag for a %s Ask entry', (_state, entry, faded) => {
+    render(<HistoryEntry entry={{ ...entry, namespace: 'litellm' }} faded={faded} />)
+    expect(screen.getByLabelText('Namespace: litellm')).toHaveTextContent('litellm')
+  })
+
+  it('does not invent a namespace tag when an entry has no namespace', () => {
+    render(<HistoryEntry entry={askEntry} />)
+    expect(screen.queryByLabelText(/^Namespace:/)).not.toBeInTheDocument()
+  })
+
   it('renders Ask badge and query', () => {
     render(<HistoryEntry entry={askEntry} faded={false} />)
     expect(screen.getByText('Ask')).toBeInTheDocument()

@@ -1,7 +1,10 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import server
+import application
+import indexing
+import namespaces
+import search
 
 SIMPLE_HTML = """
 <html><body>
@@ -13,9 +16,9 @@ SIMPLE_HTML = """
 
 @pytest.fixture
 def ns():
-    server._create_namespace(server._chroma_client, "test-ns")
-    server._use_namespace(server._chroma_client, "test-ns")
-    return server._current_collection
+    namespaces.create_namespace("test-ns")
+    namespaces.use_namespace("test-ns")
+    return namespaces.current_collection
 
 
 def make_html_response(body: str) -> MagicMock:
@@ -27,15 +30,15 @@ def make_html_response(body: str) -> MagicMock:
 
 
 def test_list_indexed_pages_empty(ns):
-    result = server._list_indexed_pages(ns)
+    result = indexing.list_indexed_pages(ns)
     assert result == []
 
 
 async def test_list_indexed_pages(ns):
     url = "http://example.com/docs"
-    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
-        await server._index_page(ns, url)
-    result = server._list_indexed_pages(ns)
+    with patch("crawling.fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await indexing.index_page(ns, url)
+    result = indexing.list_indexed_pages(ns)
     assert len(result) == 1
     assert result[0]["url"] == url
     assert result[0]["chunks"] > 0
@@ -43,29 +46,39 @@ async def test_list_indexed_pages(ns):
 
 async def test_clear_index(ns):
     url = "http://example.com/docs"
-    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
-        await server._index_page(ns, url)
+    with patch("crawling.fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await indexing.index_page(ns, url)
     assert ns.count() > 0
-    result = server._clear_index(ns)
+    result = indexing.clear_index(ns)
     assert "Deleted" in result
     assert ns.count() == 0
 
 
 def test_clear_index_empty(ns):
-    result = server._clear_index(ns)
+    result = indexing.clear_index(ns)
     assert "already empty" in result.lower()
 
 
+def test_search_docs_uses_original_query():
+    collection = MagicMock()
+    collection.name = "litellm"
+    collection.count.return_value = 1
+    collection.query.return_value = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+    result = search.search_docs(collection, "how does it work?", n_results=1)
+    collection.query.assert_called_once_with(query_texts=["how does it work?"], n_results=1)
+    assert result == {"results": [], "references": []}
+
+
 def test_search_docs_no_namespace():
-    result = server._search_docs_tool("auth tokens")
+    result = application.search_docs("auth tokens")
     assert "No namespace selected" in result["error"]
 
 
 async def test_search_docs_returns_results(ns):
     url = "http://example.com/docs"
-    with patch("server._fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
-        await server._index_page(ns, url)
-    result = server._search_docs(ns, "authentication bearer token")
+    with patch("crawling.fetch", new=AsyncMock(return_value=make_html_response(SIMPLE_HTML))):
+        await indexing.index_page(ns, url)
+    result = search.search_docs(ns, "authentication bearer token")
     results = result["results"]
     assert len(results) > 0
     assert "source_url" in results[0]

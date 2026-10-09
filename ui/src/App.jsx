@@ -81,6 +81,7 @@ export default function App() {
     }
 
     if (tool === 'ask') {
+      entry.namespace = current
       entry.status = 'pending'
       setHistory(prev => [entry, ...prev])
       try {
@@ -107,7 +108,7 @@ export default function App() {
     }
     setHistory(prev => [entry, ...prev])
     setDone()
-  }, [tool, refreshPages, setDone])
+  }, [tool, current, refreshPages, setDone])
 
   return (
     <div className="bg-slate-950 text-slate-200 font-sans text-[13px] h-screen overflow-hidden flex">

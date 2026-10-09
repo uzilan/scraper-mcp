@@ -52,17 +52,31 @@ npx vitest run src/components/NamespacePanel.test.jsx
 
 The system has two parallel interfaces over a shared in-process state:
 
-**`server.py`** — MCP server (FastMCP) that defines all tools (`create_namespace`, `index_page`, `search_docs`, etc.) and contains all business logic. Also the entry point: `main()` runs MCP (stdio) and the FastAPI HTTP server concurrently via `asyncio.gather`.
+**`server.py`** — Application entry point and startup wiring. `main()` starts MCP (stdio) and the FastAPI HTTP server concurrently, or MCP alone when `MCP_ONLY` is set.
 
-**`router.py`** — FastAPI REST layer that exposes the same capabilities over HTTP. It calls `server.py`'s private `_*` functions directly (not via MCP). On startup, it initializes `server._chroma_client` if MCP lifespan hasn't run (supporting standalone HTTP mode). Serves the built UI from `ui/dist/` at `/ui`.
+**`mcp_tools.py`** — FastMCP instance, MCP lifespan, and decorated tool wrappers delegating to the shared application functions.
+
+**`router.py`** — FastAPI REST layer that exposes the same capabilities over HTTP without importing the MCP entry point. Serves the built UI from `ui/dist/` at `/ui`.
+
+**`application.py`** — Shared application functions used by both interfaces, including active-namespace checks and document upload orchestration.
+
+**`namespaces.py`** — Namespace management, shared ChromaDB state, storage paths, and idempotent client initialization used by both lifespans (including standalone HTTP mode).
+
+**`indexing.py`** — Page/tree indexing, ChromaDB writes, indexed-page listing, and index clearing.
+
+**`crawling.py`** — HTTP fetching and HTML/Markdown link discovery.
+
+**`parsing.py`**, **`openapi.py`**, **`documents.py`** — HTML parsing/token chunking, OpenAPI/Swagger extraction, and uploaded-file extraction/indexing respectively.
+
+**`search.py`** — Search result ranking and agent-backed answers. **`agent.py`** dispatches requests using `AGENT_PROVIDER` (`claude` by default, or `codex`). **`claude_agent.py`** manages the reusable Claude SDK client; **`codex_agent.py`** runs isolated non-interactive local Codex CLI requests and cleans up subprocesses on cancellation. The browser and MCP interfaces share the same provider setting and response format.
 
 **`ui/`** — React + Vite + Tailwind frontend. `api.js` is the sole HTTP client layer. Dev server proxies all API paths (`/namespaces`, `/index`, `/search`, `/links`) to `localhost:8000`.
 
 ### Shared state
 
-Both MCP and HTTP share two module-level globals in `server.py`:
-- `_chroma_client` — the ChromaDB persistent client (path: `data/chroma/`)
-- `_current_collection` — the active namespace (a ChromaDB collection). Setting a namespace is session-global, not per-request.
+Both MCP and HTTP share two module-level globals in `namespaces.py`:
+- `chroma_client` — the ChromaDB persistent client (path: `data/chroma/`)
+- `current_collection` — the active namespace (a ChromaDB collection). Setting a namespace is session-global, not per-request.
 
 A **namespace** is a ChromaDB collection. Namespace operations must precede indexing or search.
 
@@ -76,6 +90,6 @@ Streaming endpoints (`/index/tree/stream`, `/links/stream`) use SSE via an `asyn
 
 ### Testing
 
-Backend tests use `chromadb.EphemeralClient()` (in-memory). The `conftest.py` `reset_state` fixture (autouse) replaces `server._chroma_client` with a fresh ephemeral client before each test and clears `_current_collection`.
+Backend tests use `chromadb.EphemeralClient()` (in-memory). The `conftest.py` `reset_state` fixture (autouse) replaces `namespaces.chroma_client` with a fresh ephemeral client before each test and clears `current_collection`. Tests patch dependencies in their owning modules (for example, `crawling.fetch` and `search.ask_agent`). Application integration tests verify MCP/HTTP shared state and the MCP tool contract.
 
 Frontend tests use Vitest + jsdom + React Testing Library. `src/test/setup.js` configures jest-dom matchers. `api.js` is mocked at the module level in component tests.

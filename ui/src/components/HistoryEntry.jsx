@@ -83,11 +83,15 @@ function IndexTreeBody({ result, urls }) {
   )
 }
 
-export default function HistoryEntry({ entry, faded = false }) {
-  const { tool, query, depth, result, error, urls = [], status = 'done' } = entry
+export default function HistoryEntry({ entry, faded = false, autoCollapse = false }) {
+  const { tool, query, namespace, depth, result, error, urls = [], status = 'done' } = entry
   const tc = TOOL_CONFIG[tool] ?? { icon: '?', label: tool, color: 'text-slate-400' }
   const [collapsed, setCollapsed] = useState(faded)
   const isPending = status === 'pending'
+
+  useEffect(() => {
+    if (autoCollapse) setCollapsed(true)
+  }, [autoCollapse])
 
   const summary = error ? 'error'
     : isPending ? '⋯'
@@ -103,6 +107,15 @@ export default function HistoryEntry({ entry, faded = false }) {
       >
         <span className="text-sm">{tc.icon}</span>
         <span className={`text-[10px] font-semibold uppercase tracking-wider ${tc.color}`}>{tc.label}</span>
+        {tool === 'ask' && namespace && (
+          <span
+            aria-label={`Namespace: ${namespace}`}
+            title={`Namespace: ${namespace}`}
+            className="max-w-40 shrink-0 truncate rounded-full border border-sky-900 bg-sky-950/50 px-2 py-0.5 text-[10px] text-sky-300"
+          >
+            {namespace}
+          </span>
+        )}
         <span className="flex-1 text-[11px] text-slate-400 truncate">
           {query}{depth != null ? ` · depth ${depth}` : ''}
         </span>

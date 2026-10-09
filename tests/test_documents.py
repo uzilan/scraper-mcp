@@ -4,14 +4,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import server
+import documents
+import namespaces
 
 
 @pytest.fixture
 def ns(tmp_uploads):
-    server._create_namespace(server._chroma_client, "test-ns")
-    server._use_namespace(server._chroma_client, "test-ns")
-    return server._current_collection
+    namespaces.create_namespace("test-ns")
+    namespaces.use_namespace("test-ns")
+    return namespaces.current_collection
 
 
 def _write(tmp_path, name, content, mode="w"):
@@ -25,7 +26,7 @@ def _write(tmp_path, name, content, mode="w"):
 
 def test_index_file_txt(ns, tmp_uploads):
     path = _write(tmp_uploads, "readme.txt", "Hello world\n\nThis is documentation.")
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert "readme.txt" in result
     assert ns.count() > 0
@@ -33,7 +34,7 @@ def test_index_file_txt(ns, tmp_uploads):
 
 def test_index_file_md(ns, tmp_uploads):
     path = _write(tmp_uploads, "guide.md", "# Guide\n\nThis is a guide.")
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() > 0
 
@@ -41,8 +42,8 @@ def test_index_file_md(ns, tmp_uploads):
 def test_index_file_pdf(ns, tmp_uploads):
     path = tmp_uploads / "report.pdf"
     path.write_bytes(b"%PDF fake")
-    with patch("server._extract_text_pdf", return_value="PDF content here"):
-        result = server._index_file(ns, "test-ns", path)
+    with patch("documents.extract_text_pdf", return_value="PDF content here"):
+        result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() > 0
 
@@ -50,8 +51,8 @@ def test_index_file_pdf(ns, tmp_uploads):
 def test_index_file_docx(ns, tmp_uploads):
     path = tmp_uploads / "doc.docx"
     path.write_bytes(b"PK fake docx")
-    with patch("server._extract_text_docx", return_value="Docx content here"):
-        result = server._index_file(ns, "test-ns", path)
+    with patch("documents.extract_text_docx", return_value="Docx content here"):
+        result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() > 0
 
@@ -59,8 +60,8 @@ def test_index_file_docx(ns, tmp_uploads):
 def test_index_file_xlsx(ns, tmp_uploads):
     path = tmp_uploads / "sheet.xlsx"
     path.write_bytes(b"PK fake xlsx")
-    with patch("server._extract_text_xlsx", return_value="Col A\tCol B\nVal 1\tVal 2"):
-        result = server._index_file(ns, "test-ns", path)
+    with patch("documents.extract_text_xlsx", return_value="Col A\tCol B\nVal 1\tVal 2"):
+        result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() > 0
 
@@ -72,7 +73,7 @@ def test_index_file_openapi_json(ns, tmp_uploads):
         "paths": {"/items": {"get": {"operationId": "listItems", "summary": "List items"}}},
     }
     path = _write(tmp_uploads, "api.json", json.dumps(spec))
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "operations" in result
     assert ns.count() > 0
 
@@ -89,14 +90,14 @@ paths:
       summary: List items
 """
     path = _write(tmp_uploads, "api.yaml", yaml_content)
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "operations" in result
     assert ns.count() > 0
 
 
 def test_index_file_plain_json(ns, tmp_uploads):
     path = _write(tmp_uploads, "config.json", '{"key": "value"}')
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() > 0
 
@@ -108,7 +109,7 @@ def test_index_file_openapi_json_sets_is_openapi_flag(ns, tmp_uploads):
         "paths": {"/items": {"get": {"operationId": "listItems", "summary": "List"}}},
     }
     path = _write(tmp_uploads, "api.json", json.dumps(spec))
-    server._index_file(ns, "test-ns", path)
+    documents.index_file(ns, "test-ns", path)
     metas = ns.get(where={"source_url": "file://test-ns/api.json"})["metadatas"]
     assert all(m.get("is_openapi") is True for m in metas)
 
@@ -116,7 +117,7 @@ def test_index_file_openapi_json_sets_is_openapi_flag(ns, tmp_uploads):
 def test_index_file_unsupported_doc(ns, tmp_uploads):
     path = tmp_uploads / "old.doc"
     path.write_bytes(b"\xd0\xcf binary")
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert ".doc" in result
     assert "not supported" in result
 
@@ -124,15 +125,15 @@ def test_index_file_unsupported_doc(ns, tmp_uploads):
 def test_index_file_unknown_extension(ns, tmp_uploads):
     path = tmp_uploads / "file.xyz"
     path.write_bytes(b"data")
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "Unsupported" in result
 
 
 def test_index_file_overwrites_on_reupload(ns, tmp_uploads):
     path = _write(tmp_uploads, "notes.txt", "First version content here.")
-    server._index_file(ns, "test-ns", path)
+    documents.index_file(ns, "test-ns", path)
     path.write_text("Second version content here.", encoding="utf-8")
-    server._index_file(ns, "test-ns", path)
+    documents.index_file(ns, "test-ns", path)
     assert ns.count() > 0
     source_url = "file://test-ns/notes.txt"
     docs = ns.get(where={"source_url": source_url})
@@ -140,7 +141,7 @@ def test_index_file_overwrites_on_reupload(ns, tmp_uploads):
 
 
 def test_list_documents_empty(tmp_uploads):
-    result = server._list_documents("test-ns")
+    result = documents.list_documents("test-ns")
     assert result == []
 
 
@@ -149,7 +150,7 @@ def test_list_documents_with_files(tmp_uploads):
     folder.mkdir()
     (folder / "guide.txt").write_text("hello", encoding="utf-8")
     (folder / "api.json").write_text("{}", encoding="utf-8")
-    result = server._list_documents("test-ns")
+    result = documents.list_documents("test-ns")
     names = [d["name"] for d in result]
     assert "guide.txt" in names
     assert "api.json" in names
@@ -160,11 +161,11 @@ def test_delete_document_removes_file_and_chromadb(ns, tmp_uploads):
     folder = tmp_uploads / "test-ns"
     folder.mkdir(exist_ok=True)
     path = _write(folder, "notes.txt", "Some content to index.")
-    server._index_file(ns, "test-ns", path)
+    documents.index_file(ns, "test-ns", path)
     assert ns.count() > 0
     assert path.exists()
 
-    result = server._delete_document(ns, "test-ns", "notes.txt")
+    result = documents.delete_document(ns, "test-ns", "notes.txt")
     assert "Deleted" in result
     assert not path.exists()
     source_url = "file://test-ns/notes.txt"
@@ -172,28 +173,28 @@ def test_delete_document_removes_file_and_chromadb(ns, tmp_uploads):
 
 
 def test_delete_document_not_found(ns, tmp_uploads):
-    result = server._delete_document(ns, "test-ns", "ghost.txt")
+    result = documents.delete_document(ns, "test-ns", "ghost.txt")
     assert "not found" in result.lower()
 
 
 def test_index_same_file_in_two_namespaces(tmp_uploads):
     """Same filename uploaded to two different namespaces must not conflict."""
-    server._create_namespace(server._chroma_client, "ns-alpha")
-    ns_alpha = server._current_collection
+    namespaces.create_namespace("ns-alpha")
+    ns_alpha = namespaces.current_collection
 
     path_a = tmp_uploads / "ns-alpha"
     path_a.mkdir(exist_ok=True)
     file_a = _write(path_a, "notes.txt", "Content for alpha namespace.")
-    result_a = server._index_file(ns_alpha, "ns-alpha", file_a)
+    result_a = documents.index_file(ns_alpha, "ns-alpha", file_a)
     assert "Indexed" in result_a
 
-    server._create_namespace(server._chroma_client, "ns-beta")
-    ns_beta = server._current_collection
+    namespaces.create_namespace("ns-beta")
+    ns_beta = namespaces.current_collection
 
     path_b = tmp_uploads / "ns-beta"
     path_b.mkdir(exist_ok=True)
     file_b = _write(path_b, "notes.txt", "Content for beta namespace.")
-    result_b = server._index_file(ns_beta, "ns-beta", file_b)
+    result_b = documents.index_file(ns_beta, "ns-beta", file_b)
     assert "Indexed" in result_b
 
     # Each namespace has its own independent index
@@ -204,10 +205,10 @@ def test_index_same_file_in_two_namespaces(tmp_uploads):
 def test_reupload_same_file_same_namespace_is_idempotent(ns, tmp_uploads):
     """Re-uploading the same file to the same namespace must succeed (no UniqueConstraintError)."""
     path = _write(tmp_uploads, "notes.txt", "Original content here.")
-    server._index_file(ns, "test-ns", path)
+    documents.index_file(ns, "test-ns", path)
     count_after_first = ns.count()
 
-    result = server._index_file(ns, "test-ns", path)
+    result = documents.index_file(ns, "test-ns", path)
     assert "Indexed" in result
     assert ns.count() == count_after_first
 
@@ -217,7 +218,7 @@ def test_delete_namespace_removes_uploads_folder(tmp_uploads):
     folder.mkdir()
     (folder / "file.txt").write_text("content", encoding="utf-8")
 
-    server._create_namespace(server._chroma_client, "to-delete")
-    server._delete_namespace(server._chroma_client, "to-delete")
+    namespaces.create_namespace("to-delete")
+    namespaces.delete_namespace("to-delete")
 
     assert not folder.exists()
