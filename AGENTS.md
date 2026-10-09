@@ -1,6 +1,16 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for coding agents and contributors working in this repository, regardless of the tools they use.
+
+## Working Guidelines
+
+- State important assumptions and ask for clarification when ambiguity affects the implementation. Do not invent API details or configuration options that cannot be verified.
+- Make the smallest change that solves the requested problem. Avoid speculative features, unnecessary abstractions, and unrelated refactoring or formatting.
+- Follow the existing language, framework, naming, and testing conventions. Preserve unrelated changes and remove only unused code introduced by your own work.
+- For multi-step tasks, outline a brief plan with verifiable success criteria before editing. Update documentation when the requested change affects usage or behavior.
+- Validate changes with the most relevant tests or checks first, then broader checks as needed. Report what was verified and any limitations; do not claim checks passed unless they ran successfully.
+- Keep credentials and sensitive data out of code, logs, and responses. Do not commit, create branches, or perform destructive operations unless requested.
+- Keep progress updates and final summaries concise, focusing on changes, verification, and unresolved issues.
 
 ## Commands
 
