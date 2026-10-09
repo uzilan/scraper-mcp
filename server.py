@@ -161,7 +161,9 @@ def _create_namespace(client: chromadb.api.ClientAPI, name: str) -> str:
     global _current_collection
     if not VALID_NAME.match(name):
         return f"Invalid name '{name}'. Use 3-63 chars, alphanumeric + hyphens/underscores only."
-    _current_collection = client.get_or_create_collection(name, embedding_function=embed_fn)
+    _current_collection = client.get_or_create_collection(
+        name, embedding_function=embed_fn, configuration={"hnsw": {"space": "cosine"}}
+    )
     return f"Namespace '{name}' created and is now active."
 
 
@@ -300,14 +302,23 @@ async def _index_tree(
 def _list_indexed_pages(collection: chromadb.Collection) -> list[dict]:
     if collection.count() == 0:
         return []
-    metadatas = collection.get()["metadatas"]
     counts: dict[str, int] = {}
     openapi_urls: set[str] = set()
-    for meta in metadatas:
-        url = meta.get("source_url", "unknown")
-        counts[url] = counts.get(url, 0) + 1
-        if meta.get("is_openapi"):
-            openapi_urls.add(url)
+    batch_size = 500
+    offset = 0
+    while True:
+        result = collection.get(limit=batch_size, offset=offset, include=["metadatas"])
+        metadatas = result["metadatas"]
+        if not metadatas:
+            break
+        for meta in metadatas:
+            url = meta.get("source_url", "unknown")
+            counts[url] = counts.get(url, 0) + 1
+            if meta.get("is_openapi"):
+                openapi_urls.add(url)
+        if len(metadatas) < batch_size:
+            break
+        offset += batch_size
     return [
         {"url": url, "chunks": n, "is_openapi": url in openapi_urls}
         for url, n in sorted(counts.items())
@@ -318,8 +329,12 @@ def _clear_index(collection: chromadb.Collection) -> str:
     count = collection.count()
     if count == 0:
         return "Index already empty."
-    all_ids = collection.get()["ids"]
-    collection.delete(ids=all_ids)
+    batch_size = 500
+    while True:
+        batch = collection.get(limit=batch_size, include=[])
+        if not batch["ids"]:
+            break
+        collection.delete(ids=batch["ids"])
     return f"Deleted {count} documents from index."
 
 
@@ -343,11 +358,14 @@ def _search_docs(collection: chromadb.Collection, query: str, n_results: int = 5
         results["metadatas"][0],
         results["distances"][0],
     ):
+        relevance_score = round(max(0.0, 1 - dist), 3)
+        if relevance_score <= 0.0:
+            continue
         url = meta.get("source_url", "unknown")
         output.append({
             "text": doc,
             "source_url": url,
-            "relevance_score": round(max(0.0, 1 - dist), 3),
+            "relevance_score": relevance_score,
         })
         if url not in seen_urls:
             seen_urls.append(url)
@@ -480,7 +498,15 @@ def chunk(text: str, max_tokens: int = 500) -> list[str]:
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     chunks, current, count = [], [], 0
     for para in paragraphs:
-        n = len(enc.encode(para))
+        tokens = enc.encode(para)
+        n = len(tokens)
+        if n > max_tokens:
+            if current:
+                chunks.append("\n\n".join(current))
+                current, count = [], 0
+            for i in range(0, n, max_tokens):
+                chunks.append(enc.decode(tokens[i:i + max_tokens]))
+            continue
         if count + n > max_tokens and current:
             chunks.append("\n\n".join(current))
             current, count = [], 0
